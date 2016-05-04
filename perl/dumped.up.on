@@ -1,0 +1,78 @@
+Thu Sep 24 05:55:12 EDT 2015
+$VAR1 = {
+          'alerts' => '
+
+',
+          'success' => bless( do{\(my $o = 1)}, 'JSON::backportPP::Boolean' ),
+          'latestData' => {
+                            'drData' => {
+                                          'DeltaCoolSP' => '-0.01',
+                                          'Load' => '127.5',
+                                          'CoolSetpLimit' => 0,
+                                          'Phase' => -1,
+                                          'OptOutable' => bless( do{\(my $o = 0)}, 'JSON::backportPP::Boolean' ),
+                                          'HeatSetpLimit' => 0,
+                                          'DeltaHeatSP' => '-0.01'
+                                        },
+                            'uiData' => {
+                                          'ScheduleHeatSp' => '64',
+                                          'OutdoorTemperature' => '128',
+                                          'HeatNextPeriod' => 24,
+                                          'IsInVacationHoldMode' => $VAR1->{'latestData'}{'drData'}{'OptOutable'},
+                                          'VacationHold' => 0,
+                                          'SwitchOffAllowed' => $VAR1->{'success'},
+                                          'SwitchCoolAllowed' => $VAR1->{'success'},
+                                          'Commercial' => $VAR1->{'latestData'}{'drData'}{'OptOutable'},
+                                          'CoolSetpoint' => '74',
+                                          'IndoorHumidity' => '128',
+                                          'OutdoorTemperatureSensorNotFault' => $VAR1->{'success'},
+                                          'HeatLowerSetptLimit' => '40',
+                                          'HeatUpperSetptLimit' => '90',
+                                          'OutdoorHumidStatus' => 128,
+                                          'DeviceID' => 1196322,
+                                          'StatusCool' => 2,
+                                          'ScheduleCoolSp' => '69',
+                                          'DispTemperature' => '77',
+                                          'OutdoorTemperatureAvailable' => $VAR1->{'latestData'}{'drData'}{'OptOutable'},
+                                          'DispTemperatureAvailable' => $VAR1->{'success'},
+                                          'DualSetpointStatus' => $VAR1->{'latestData'}{'drData'}{'OptOutable'},
+                                          'Deadband' => '3',
+                                          'SwitchEmergencyHeatAllowed' => $VAR1->{'success'},
+                                          'ScheduleCapable' => $VAR1->{'success'},
+                                          'StatusHeat' => 2,
+                                          'VacationHoldUntilTime' => 0,
+                                          'SwitchAutoAllowed' => $VAR1->{'success'},
+                                          'SwitchHeatAllowed' => $VAR1->{'success'},
+                                          'IndoorHumiditySensorNotFault' => $VAR1->{'success'},
+                                          'CoolUpperSetptLimit' => '99',
+                                          'HoldUntilCapable' => $VAR1->{'success'},
+                                          'IndoorHumiditySensorAvailable' => $VAR1->{'latestData'}{'drData'}{'OptOutable'},
+                                          'HeatSetpoint' => '68',
+                                          'DisplayUnits' => 'F',
+                                          'TemporaryHoldUntilTime' => 0,
+                                          'CoolLowerSetptLimit' => '50',
+                                          'SystemSwitchPosition' => 3,
+                                          'OutdoorTempStatus' => 128,
+                                          'DispTemperatureStatus' => 0,
+                                          'IndoorHumidStatus' => 128,
+                                          'CurrentSetpointStatus' => 2,
+                                          'OutdoorHumidity' => '128',
+                                          'CoolNextPeriod' => 24,
+                                          'OutdoorHumiditySensorNotFault' => $VAR1->{'success'},
+                                          'SetpointChangeAllowed' => $VAR1->{'success'},
+                                          'OutdoorHumidityAvailable' => $VAR1->{'latestData'}{'drData'}{'OptOutable'}
+                                        },
+                            'canControlHumidification' => $VAR1->{'latestData'}{'drData'}{'OptOutable'},
+                            'fanData' => {
+                                           'fanMode' => 0,
+                                           'fanModeAutoAllowed' => $VAR1->{'success'},
+                                           'fanModeCirculateAllowed' => $VAR1->{'latestData'}{'drData'}{'OptOutable'},
+                                           'fanModeOnAllowed' => $VAR1->{'success'},
+                                           'fanModeFollowScheduleAllowed' => $VAR1->{'latestData'}{'drData'}{'OptOutable'}
+                                         },
+                            'hasFan' => $VAR1->{'success'}
+                          },
+          'deviceLive' => $VAR1->{'success'},
+          'communicationLost' => $VAR1->{'latestData'}{'drData'}{'OptOutable'}
+        };
+

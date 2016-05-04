@@ -1,0 +1,78 @@
+Thu Sep 24 05:52:38 EDT 2015
+$VAR1 = {
+          'latestData' => {
+                            'canControlHumidification' => bless( do{\(my $o = 0)}, 'JSON::backportPP::Boolean' ),
+                            'uiData' => {
+                                          'OutdoorHumidity' => '128',
+                                          'HoldUntilCapable' => bless( do{\(my $o = 1)}, 'JSON::backportPP::Boolean' ),
+                                          'VacationHold' => 0,
+                                          'DispTemperatureStatus' => 0,
+                                          'DispTemperature' => '77',
+                                          'CoolNextPeriod' => 24,
+                                          'OutdoorHumiditySensorNotFault' => $VAR1->{'latestData'}{'uiData'}{'HoldUntilCapable'},
+                                          'OutdoorTemperatureAvailable' => $VAR1->{'latestData'}{'canControlHumidification'},
+                                          'TemporaryHoldUntilTime' => 0,
+                                          'CoolLowerSetptLimit' => '50',
+                                          'HeatSetpoint' => '68',
+                                          'OutdoorTempStatus' => 128,
+                                          'IsInVacationHoldMode' => $VAR1->{'latestData'}{'canControlHumidification'},
+                                          'Commercial' => $VAR1->{'latestData'}{'canControlHumidification'},
+                                          'IndoorHumiditySensorAvailable' => $VAR1->{'latestData'}{'canControlHumidification'},
+                                          'HeatUpperSetptLimit' => '90',
+                                          'SwitchCoolAllowed' => $VAR1->{'latestData'}{'uiData'}{'HoldUntilCapable'},
+                                          'ScheduleCoolSp' => '69',
+                                          'SwitchOffAllowed' => $VAR1->{'latestData'}{'uiData'}{'HoldUntilCapable'},
+                                          'SwitchAutoAllowed' => $VAR1->{'latestData'}{'uiData'}{'HoldUntilCapable'},
+                                          'SetpointChangeAllowed' => $VAR1->{'latestData'}{'uiData'}{'HoldUntilCapable'},
+                                          'VacationHoldUntilTime' => 0,
+                                          'ScheduleCapable' => $VAR1->{'latestData'}{'uiData'}{'HoldUntilCapable'},
+                                          'DispTemperatureAvailable' => $VAR1->{'latestData'}{'uiData'}{'HoldUntilCapable'},
+                                          'DualSetpointStatus' => $VAR1->{'latestData'}{'canControlHumidification'},
+                                          'OutdoorTemperatureSensorNotFault' => $VAR1->{'latestData'}{'uiData'}{'HoldUntilCapable'},
+                                          'CoolUpperSetptLimit' => '99',
+                                          'DeviceID' => 1196322,
+                                          'IndoorHumiditySensorNotFault' => $VAR1->{'latestData'}{'uiData'}{'HoldUntilCapable'},
+                                          'SwitchEmergencyHeatAllowed' => $VAR1->{'latestData'}{'uiData'}{'HoldUntilCapable'},
+                                          'CurrentSetpointStatus' => 2,
+                                          'StatusHeat' => 2,
+                                          'SystemSwitchPosition' => 3,
+                                          'HeatLowerSetptLimit' => '40',
+                                          'Deadband' => '3',
+                                          'OutdoorTemperature' => '128',
+                                          'IndoorHumidStatus' => 128,
+                                          'HeatNextPeriod' => 24,
+                                          'StatusCool' => 2,
+                                          'OutdoorHumidityAvailable' => $VAR1->{'latestData'}{'canControlHumidification'},
+                                          'OutdoorHumidStatus' => 128,
+                                          'SwitchHeatAllowed' => $VAR1->{'latestData'}{'uiData'}{'HoldUntilCapable'},
+                                          'DisplayUnits' => 'F',
+                                          'IndoorHumidity' => '128',
+                                          'CoolSetpoint' => '80',
+                                          'ScheduleHeatSp' => '64'
+                                        },
+                            'fanData' => {
+                                           'fanMode' => 0,
+                                           'fanModeOnAllowed' => $VAR1->{'latestData'}{'uiData'}{'HoldUntilCapable'},
+                                           'fanModeFollowScheduleAllowed' => $VAR1->{'latestData'}{'canControlHumidification'},
+                                           'fanModeCirculateAllowed' => $VAR1->{'latestData'}{'canControlHumidification'},
+                                           'fanModeAutoAllowed' => $VAR1->{'latestData'}{'uiData'}{'HoldUntilCapable'}
+                                         },
+                            'hasFan' => $VAR1->{'latestData'}{'uiData'}{'HoldUntilCapable'},
+                            'drData' => {
+                                          'CoolSetpLimit' => 0,
+                                          'OptOutable' => $VAR1->{'latestData'}{'canControlHumidification'},
+                                          'Phase' => -1,
+                                          'DeltaCoolSP' => '-0.01',
+                                          'HeatSetpLimit' => 0,
+                                          'DeltaHeatSP' => '-0.01',
+                                          'Load' => '127.5'
+                                        }
+                          },
+          'communicationLost' => $VAR1->{'latestData'}{'canControlHumidification'},
+          'success' => $VAR1->{'latestData'}{'uiData'}{'HoldUntilCapable'},
+          'alerts' => '
+
+',
+          'deviceLive' => $VAR1->{'latestData'}{'uiData'}{'HoldUntilCapable'}
+        };
+
