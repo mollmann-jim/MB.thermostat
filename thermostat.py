@@ -170,7 +170,7 @@ def get_login(action, value=None, hold_time=1, DEVICE_ID=DEVICE_ID_DOWN):
     j = json.loads(rawdata)
     #print "R3 Dump"
     #print json.dumps(j,indent=2)
-    print json.dumps(j,sort_keys=True,indent=4, separators=(',', ': '))
+    #print json.dumps(j,sort_keys=True,indent=4, separators=(',', ': '))
     #print "Success:",j['success']
     #print "Live",j['deviceLive']
     print "Indoor Temperature:",j['latestData']['uiData']["DispTemperature"]
