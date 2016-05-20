@@ -49,6 +49,8 @@ class Thermo:
         self.outputStatus = None
         self.whenStatus = None
         self.statusValidSeconds = 30
+        self.statusLineNum = 0
+        self.statusLinesPerPage = 5
         print "__init__ DEVICE_ID", DEVICE_ID
 
     def sample(self):
@@ -58,7 +60,6 @@ class Thermo:
 
     def showStatusLong(self):
         if self.staleStatus():
-            print "status is stale"
             self.getStatus()
         print "Indoor Temperature:",self.temperature
         print "Cool Setpoint:",self.coolSet
@@ -83,6 +84,46 @@ class Thermo:
             "Fan:", self.fanStatus, \
             "Fan On", self.fanOn, \
             "Output:", self.outputStatus
+
+    def showStatusLine(self):
+        if self.staleStatus():
+            self.getStatus()
+        untilHH = self.holdUntil / 60
+        untilMM = self.holdUntil % 60
+        until = "{0:02d}:{1:02d}".format(untilHH, untilMM)
+        if self.holdUntil == 0:
+            until = '     '
+        if self.coolStatus == 0:
+            coolStatus = 'schedule'
+        elif self.coolStatus == 1:
+            coolStatus = 'hold until'
+        elif self.coolStatus == 2:
+            coolStatus = 'hold perm'
+        else:
+            coolStatus = 'unk {0:6d}'.format(self.coolStatus)
+        if self.heatStatus == 0:
+            heatStatus = 'schedule'
+        elif self.heatStatus == 1:
+            heatStatus = 'hold until'
+        elif self.heatStatus == 2:
+            heatStatus = 'hold perm'
+        else:
+            heatStatus = 'unk {0:6d}'.format(self.heatStatus)
+        if self.fanStatus == 0:
+            fanStatus = 'auto'
+        elif self.fanStatus == 1:
+            fanStatus = 'on'
+        else:
+            fanStatus = str(self.fanStatus)
+        if self.statusLineNum % self.statusLinesPerPage == 0:
+            print '{0:^26s} {1:4s} {2:4s} {3:4s} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^5s} {9:6s}'.\
+                format('         ', '    ', 'Cool', 'Heat', ' Hold', ' Cool ', ' Heat ', 'Fan', 'Fan', 'Output')
+            print '{0:^26s} {1:4s} {2:4s} {3:4s} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^5s} {9:6s}'.\
+                format('Date Time', 'Temp', ' Set', ' Set', 'Until', 'Status', 'Status', 'Status', 'On', 'Status')
+        print '{0:^26s} {1:4d} {2:4d} {3:4d} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^5s} {9:6d}'.\
+            format(str(self.whenStatus), int(self.temperature), int(self.coolSet), int(self.heatSet), until,\
+                   coolStatus, heatStatus, fanStatus, str(self.fanOn), self.outputStatus)
+        self.statusLineNum += 1
         
     def staleStatus(self):
         if self.whenStatus != None:
@@ -188,7 +229,6 @@ class Thermo:
             self.get_login()
         code=str(self.DEVICE_ID)
         t = datetime.datetime.now()
-        self.whenStatus = t
         utc_seconds = (time.mktime(t.timetuple()))
         utc_seconds = int(utc_seconds*1000)
         #print "Code ",code
@@ -494,8 +534,9 @@ def main():
     down = Thermo(DEVICE_ID_DOWN)
 
     up.showStatusLong()
-    for i in range(1000):
-        up.showStatusShort()
+    up.showStatusShort()
+    for i in range(10000):
+        up.showStatusLine()
         time.sleep(300)
         
     up.sample()
