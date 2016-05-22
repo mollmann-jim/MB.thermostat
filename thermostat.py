@@ -47,82 +47,61 @@ class Thermo:
         self.fanStatus = None
         self.fanOn = None
         self.outputStatus = None
+        self.switchPosition = None
         self.whenStatus = None
         self.statusValidSeconds = 30
         self.statusLineNum = 0
         self.statusLinesPerPage = 5
-        print "__init__ DEVICE_ID", DEVICE_ID
-
-    def sample(self):
-        print "sample DEVICE_ID", self.DEVICE_ID
-        print "AUTH", self.AUTH
-        print "USERNAME", USERNAME
+        self.strSwitchPosition = [ 'aux ' , 'heat', 'off ', 'cool', 'auto' ]
+        self.strStatus = [ 'schedule', 'hold until', 'hold perm', 'undefined' ]
+        self.strFan = [ 'auto', 'on' ]
+        self.strOutputStatus = ['off', 'heat on', 'cool on', 'undefined' ]
 
     def showStatusLong(self):
-        if self.staleStatus():
-            self.getStatus()
-        print "Indoor Temperature:",self.temperature
-        print "Cool Setpoint:",self.coolSet
-        print "Heat Setpoint:",self.heatSet
-        print "Hold Until :",self.holdUntil
-        print "Status Cool:",self.coolStatus
-        print "Status Heat:",self.heatStatus
-        print "Status Fan:",self.fanStatus
-        print "Fan Running",self.fanOn
-        print "Output Status",self.outputStatus
+        self.getStatus()
+        print "Indoor Temperature:", self.temperature
+        print "Cool Setpoint:", self.coolSet
+        print "Heat Setpoint:", self.heatSet
+        print "Hold Until :", self.holdUntil
+        print "Status Cool:", self.strStatus[self.coolStatus]
+        print "Status Heat:", self.strStatus[self.heatStatus]
+        print "Status Fan:", self.strFan[self.fanStatus]
+        print "Fan Running", self.fanOn
+        print "Output Status", self.strOutputStatus[self.outputStatus]
+        print "System Switch", self.strSwitchPosition[self.switchPosition]
 
     def showStatusShort(self):
-        if self.staleStatus():
-            self.getStatus()
+        self.getStatus()
         print self.whenStatus, \
             "Temp:", self.temperature, \
             "Cool Set:", self.coolSet, \
             "Heat Set:", self.heatSet, \
             "Hold:", self.holdUntil, \
-            "Cool:", self.coolStatus, \
-            "Heat:", self.heatStatus, \
-            "Fan:", self.fanStatus, \
+            "Cool:", self.strStatus[self.coolStatus], \
+            "Heat:", self.strStatus[self.heatStatus], \
+            "Fan:", self.strFan[self.fanStatus], \
             "Fan On", self.fanOn, \
-            "Output:", self.outputStatus
+            "Output:", self.strOutputStatus[self.outputStatus], \
+            "Mode:", self.strSwitchPosition[self.switchPosition]
 
     def showStatusLine(self):
-        if self.staleStatus():
-            self.getStatus()
+        self.getStatus()
         untilHH = self.holdUntil / 60
         untilMM = self.holdUntil % 60
         until = "{0:02d}:{1:02d}".format(untilHH, untilMM)
         if self.holdUntil == 0:
             until = '     '
-        if self.coolStatus == 0:
-            coolStatus = 'schedule'
-        elif self.coolStatus == 1:
-            coolStatus = 'hold until'
-        elif self.coolStatus == 2:
-            coolStatus = 'hold perm'
-        else:
-            coolStatus = 'unk {0:6d}'.format(self.coolStatus)
-        if self.heatStatus == 0:
-            heatStatus = 'schedule'
-        elif self.heatStatus == 1:
-            heatStatus = 'hold until'
-        elif self.heatStatus == 2:
-            heatStatus = 'hold perm'
-        else:
-            heatStatus = 'unk {0:6d}'.format(self.heatStatus)
-        if self.fanStatus == 0:
-            fanStatus = 'auto'
-        elif self.fanStatus == 1:
-            fanStatus = 'on'
-        else:
-            fanStatus = str(self.fanStatus)
         if self.statusLineNum % self.statusLinesPerPage == 0:
-            print '{0:^26s} {1:4s} {2:4s} {3:4s} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^5s} {9:6s}'.\
-                format('         ', '    ', 'Cool', 'Heat', ' Hold', ' Cool ', ' Heat ', 'Fan', 'Fan', 'Output')
-            print '{0:^26s} {1:4s} {2:4s} {3:4s} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^5s} {9:6s}'.\
-                format('Date Time', 'Temp', ' Set', ' Set', 'Until', 'Status', 'Status', 'Status', 'On', 'Status')
-        print '{0:^26s} {1:4d} {2:4d} {3:4d} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^5s} {9:6d}'.\
+            print '{0:^26s} {1:4s} {2:4s} {3:4s} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^5s} {9:6s} {10:4s}'.\
+                format('         ', '    ', 'Cool', 'Heat', ' Hold', ' Cool ', ' Heat ', 'Fan', 'Fan', 'Output',\
+                       '    ')
+            print '{0:^26s} {1:4s} {2:4s} {3:4s} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^5s} {9:6s} {10:4s}'.\
+                format('Date Time', 'Temp', ' Set', ' Set', 'Until', 'Status', 'Status', 'Status', 'On', 'Status',\
+                       'Mode')
+        print '{0:^26s} {1:4d} {2:4d} {3:4d} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^5s} {9:^6s} {10:4s}'.\
             format(str(self.whenStatus), int(self.temperature), int(self.coolSet), int(self.heatSet), until,\
-                   coolStatus, heatStatus, fanStatus, str(self.fanOn), self.outputStatus)
+                   self.strStatus[self.coolStatus], self.strStatus[self.heatStatus], self.strFan[self.fanStatus],\
+                   str(self.fanOn), self.strOutputStatus[self.outputStatus], self.strSwitchPosition[self.switchPosition])
         self.statusLineNum += 1
         
     def staleStatus(self):
@@ -223,8 +202,10 @@ class Thermo:
             print("ErrorNever got redirect on initial login  status={0} {1}".format(r1.status,r1.reason))
             return
 
-    def getStatus(self):
+    def getStatus(self, now = False):
         #print "getStatus"
+        if not now and not self.staleStatus():
+            return
         if self.cookie == "":
             self.get_login()
         code=str(self.DEVICE_ID)
@@ -278,7 +259,56 @@ class Thermo:
         self.fanOn = j['latestData']['fanData']['fanIsRunning']
         self.outputStatus = j['latestData']['uiData']['EquipmentOutputStatus']
         self.whenStatus = t
+        self.switchPosition = j['latestData']['uiData']['SystemSwitchPosition']
+        
+    def setThermostat(self, mode=None, temp=None, fan=None):
+        # Calculate the hold time for cooling/heating
+        t = datetime.datetime.now();
+
+        stop_time = ((t.hour+hold_time)%24) * 60 + t.minute
+        stop_time = stop_time/15
+
+        # Modify payload based on user input
+        
+        if (action == "cool"):
+            payload["CoolSetpoint"] = value
+            payload["StatusCool"] = 1
+            payload["StatusHeat"] = 1
+            payload["CoolNextPeriod"] = stop_time
     
+        if (action == "heat"):
+            payload["HeatSetpoint"] = value
+            payload["StatusCool"] = 1
+            payload["StatusHeat"] = 1
+            payload["HeatNextPeriod"] = stop_time
+
+        if (action == "cancel"):
+            payload["StatusCool"] = 0
+            payload["StatusHeat"] = 0
+
+        if (action == "fan"):
+            payload["FanMode"] = value
+
+
+        # Prep and send payload
+            
+        location="/portal/Device/SubmitControlScreenChanges"
+
+        rawj=json.dumps(payload)
+  
+        conn = httplib.HTTPSConnection("mytotalconnectcomfort.com");
+        #conn.set_debuglevel(999);
+        #print "R4 will send"
+        #print rawj
+        conn.request("POST", location,rawj,headers)
+        r4 = conn.getresponse()
+        if (r4.status != 200): 
+            print("Error Didn't get 200 status on R4 status={0} {1}".format(r4.status,r4.reason))
+            return
+        else:
+            print "Success in configuring thermostat!"
+            #  print "R4 got 200"
+            
 #===============================================================================
 
 AUTH="https://mytotalconnectcomfort.com/portal"
@@ -539,8 +569,6 @@ def main():
         up.showStatusLine()
         time.sleep(300)
         
-    up.sample()
-
     if sys.argv[1] == "-s":
         get_login("status")
         sys.exit()
