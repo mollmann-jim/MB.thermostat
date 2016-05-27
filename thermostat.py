@@ -33,8 +33,9 @@ except:
 
 class Thermo:
     
-    def __init__(self, DEVICE_ID):
+    def __init__(self, DEVICE_ID, name):
         self.DEVICE_ID = DEVICE_ID
+        self.name = name
         self.cookie = ""
         self.temperature = None
         self.coolSet = None
@@ -324,14 +325,67 @@ class Thermo:
             #  print "R4 got 200"
             pass
 
+class Circulate:
+
+    def __init__(self, thermostat, scheduler):
+        self.thermostat = thermostat
+        self.scheduler = scheduler
+        self.runtime = 5*60
+        self.frequency = 60*60
+        self.startMinute = 0
+        self.starttime = None
+        self.endtime = None
+        print "init Circulate for", self.thermostat.name
+
+    def Schedule(self, startMinute = None, runtime = None, frequency = None):
+        if startMinute:
+            self.startMinute = startMinute
+        if runtime:
+            self.runtime = runtime
+        if frequency:
+            self.frequency = frequency
+        now = datetime.datetime.now()
+        firstTime = now.replace(minute = self.startMinute, second = 0, microsecond = 0) +\
+                    datetime.timedelta(hours = 1)
+        self.starttime = firstTime
+        self.endtime = firstTime + datetime.timedelta(seconds = self.runtime)
+        print "Start time:", self.starttime
+        print "  End time:", self.endtime
+        self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.FanStart, (self.thermostat, True))
+        self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.FanStart, (self.thermostat, False))
+
+    def FanStart(self, thermostat, on):
+        if on:
+            print "Fan On", datetime.datetime.now()
+            self.starttime = self.starttime + datetime.timedelta(seconds = self.frequency)
+            print "Next fan on", self.starttime
+            self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.FanStart, (self.thermostat, True))
+        else:
+            print "Fan On", datetime.datetime.now()
+            self.endtime = self.endtime + datetime.timedelta(seconds = self.frequency)
+            print "Next fan off", self.starttime
+            self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.FanStart, (self.thermostat, False))
+
+                
 def main():
     
-    up = Thermo(DEVICE_ID_UP)
-    down = Thermo(DEVICE_ID_DOWN)
+    up = Thermo(DEVICE_ID_UP, 'Upstairs')
+    down = Thermo(DEVICE_ID_DOWN, 'Downstairs')
+    
+    # Build a scheduler object that will look at absolute times
+    scheduler = sched.scheduler(time.time, time.sleep)
 
+    upCirculate = Circulate(up, scheduler)
+    downCirculate = Circulate(down, scheduler)
+
+    upCirculate.Schedule(startMinute = 0)
+    downCirculate.Schedule(startMinute = 1)
+    
     up.showStatusLong()
     up.showStatusShort()
 
+    #scheduler.run()
+    
     up.setThermostat(heat = 51)
     time.sleep(31)
     up.showStatusLine()
