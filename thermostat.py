@@ -53,26 +53,28 @@ class Thermo:
         self.statusLinesPerPage = 20
         self.strSwitchPosition = [ 'aux ' , 'heat', 'off ', 'cool', 'autoHeat', 'autoCool', 'SouthernAway', '7WTF' ]
         self.strStatus = [ 'schedule', 'hold until', 'hold perm', 'vacation', '4WTF' ]
-        self.strFan = [ 'auto', 'on', 'circulate', 'sechedule', '4WTF' ]
+        self.strFan = [ 'auto', 'on', 'circulate', 'schedule', '4WTF' ]
         self.strOutputStatus = ['off', 'heat on', 'cool on', 'undefined' ]
         self.cookiere=re.compile('\s*([^=]+)\s*=\s*([^;]*)\s*')
 
     def showStatusLong(self):
         self.getStatus()
-        print "Indoor Temperature:", self.temperature
-        print "Cool Setpoint:", self.coolSet
-        print "Heat Setpoint:", self.heatSet
-        print "Hold Until :", self.holdUntil
-        print "Status Cool:", self.strStatus[self.coolStatus]
-        print "Status Heat:", self.strStatus[self.heatStatus]
-        print "Status Fan:", self.strFan[self.fanStatus]
-        print "Fan Running", self.fanOn
-        print "Output Status", self.strOutputStatus[self.outputStatus]
-        print "System Switch", self.strSwitchPosition[self.switchPosition]
+        print self.name, ':'
+        print " Indoor Temperature:", self.temperature
+        print " Cool Setpoint:", self.coolSet
+        print " Heat Setpoint:", self.heatSet
+        print " Hold Until :", self.holdUntil
+        print " Status Cool:", self.strStatus[self.coolStatus]
+        print " Status Heat:", self.strStatus[self.heatStatus]
+        print " Status Fan:", self.strFan[self.fanStatus]
+        print " Fan Running", self.fanOn
+        print " Output Status", self.strOutputStatus[self.outputStatus]
+        print " System Switch", self.strSwitchPosition[self.switchPosition]
 
     def showStatusShort(self):
         self.getStatus()
-        print self.whenStatus, \
+        print self.name, \
+            self.whenStatus, \
             "Temp:", self.temperature, \
             "Cool Set:", self.coolSet, \
             "Heat Set:", self.heatSet, \
@@ -92,16 +94,17 @@ class Thermo:
         if self.holdUntil == 0:
             until = '     '
         if self.statusLineNum % self.statusLinesPerPage == 0:
-            print '{0:^26s} {1:4s} {2:4s} {3:4s} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^5s} {9:6s} {10:8s}'.\
+            print '{11:10s} {0:^20s} {1:4s} {2:4s} {3:4s} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^7s} {9:6s} {10:8s}'.\
                 format('         ', '    ', 'Cool', 'Heat', ' Hold', ' Cool ', ' Heat ', 'Fan', 'Fan', 'Output',\
-                       '    ')
-            print '{0:^26s} {1:4s} {2:4s} {3:4s} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^5s} {9:6s} {10:^8s}'.\
+                       '    ', ' ')
+            print '{11:10s} {0:^20s} {1:4s} {2:4s} {3:4s} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^7s} {9:6s} {10:^8s}'.\
                 format('Date Time', 'Temp', ' Set', ' Set', 'Until', 'Status', 'Status', 'Status', 'On', 'Status',\
-                       'Mode')
-        print '{0:^26s} {1:4d} {2:4d} {3:4d} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^5s} {9:^6s} {10:^8s}'.\
+                       'Mode', ' ')
+        print '{11:10s} {0:^20s} {1:4d} {2:4d} {3:4d} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^7s} {9:^6s} {10:^8s}'.\
             format(str(self.whenStatus), int(self.temperature), int(self.coolSet), int(self.heatSet), until,\
                    self.strStatus[self.coolStatus], self.strStatus[self.heatStatus], self.strFan[self.fanStatus],\
-                   str(self.fanOn), self.strOutputStatus[self.outputStatus], self.strSwitchPosition[self.switchPosition])
+                   str(self.fanOn), self.strOutputStatus[self.outputStatus], self.strSwitchPosition[self.switchPosition],\
+                   self.name)
         self.statusLineNum += 1
         
     def staleStatus(self):
@@ -113,6 +116,21 @@ class Thermo:
             return delta > self.statusValidSeconds
         else:
             return True
+
+    def scheduleOn(self):
+        return self.coolStatus == 0 and self.heatStatus == 0
+
+    def getCoolSetpoint(self):
+        self.getStatus()
+        return self.coolSet
+
+    def getHeatSetpoint(self):
+        self.getStatus()
+        return self.heatSet
+
+    def getTemp(self):
+        self.getStatus()
+        return self.temperature
     
     def client_cookies(self, cookiestr, container):
         if not container: container={}
@@ -258,8 +276,8 @@ class Thermo:
         self.fanStatus = j['latestData']['fanData']["fanMode"]
         self.fanOn = j['latestData']['fanData']['fanIsRunning']
         self.outputStatus = j['latestData']['uiData']['EquipmentOutputStatus']
-        self.whenStatus = t
         self.switchPosition = j['latestData']['uiData']['SystemSwitchPosition']
+        self.whenStatus = t.replace(microsecond = 0) # close enough
         
     def setThermostat(self, heat=None, cool=None, fan=None):
         headers={
@@ -285,8 +303,8 @@ class Thermo:
             "FanMode": None,
             "HeatNextPeriod": None,
             "HeatSetpoint": None,
-            "StatusCool": 2,    # hold perm
-            "StatusHeat": 2,    # hold perm
+            "StatusCool": None,
+            "StatusHeat": None,
             "SystemSwitch": 4,  # auto
         }
         # Calculate the hold time for cooling/heating
@@ -345,28 +363,137 @@ class Circulate:
         if frequency:
             self.frequency = frequency
         now = datetime.datetime.now()
-        firstTime = now.replace(minute = self.startMinute, second = 0, microsecond = 0) +\
-                    datetime.timedelta(hours = 1)
+        firstTime = now.replace(hour = 0, minute = self.startMinute, second = 0, microsecond = 0) -\
+                    datetime.timedelta(days=7)
+        while firstTime < now:
+            firstTime += datetime.timedelta(seconds = self.frequency)
         self.starttime = firstTime
         self.endtime = firstTime + datetime.timedelta(seconds = self.runtime)
-        print "Start time:", self.starttime
-        print "  End time:", self.endtime
-        self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.FanStart, (self.thermostat, True))
-        self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.FanStart, (self.thermostat, False))
+        print "Fan Start time:", self.starttime, self.thermostat.name
+        print "Fan   End time:", self.endtime, self.thermostat.name
+        self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.FanStart, [True])
+        self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.FanStart, [False])
 
-    def FanStart(self, thermostat, on):
+    def FanStart(self, on):
         if on:
-            print "Fan On", datetime.datetime.now()
+            print "Fan On", datetime.datetime.now(), self.thermostat.name
+            if self.thermostat.scheduleOn:
+                self.thermostat.setThermostat(fan = True)
             self.starttime = self.starttime + datetime.timedelta(seconds = self.frequency)
-            print "Next fan on", self.starttime
-            self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.FanStart, (self.thermostat, True))
+            #print "Next fan on", self.starttime
+            self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.FanStart, [True])
         else:
-            print "Fan On", datetime.datetime.now()
+            print "Fan Off", datetime.datetime.now(), self.thermostat.name
+            self.thermostat.setThermostat(fan = False)
             self.endtime = self.endtime + datetime.timedelta(seconds = self.frequency)
-            print "Next fan off", self.starttime
-            self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.FanStart, (self.thermostat, False))
+            #print "Next fan off", self.starttime
+            self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.FanStart, [False])
+
+class HumidityControl:
+
+    def __init__(self, thermostat, scheduler):
+        self.thermostat = thermostat
+        self.scheduler = scheduler
+        self.runtime = 30*60
+        self.frequency = 24*60*60
+        self.startHour = 6
+        self.startMinute = 30
+        self.coolSet = 62
+        self.heatSet = 72
+        self.coolLimit = 65
+        self.heatLimit = 68
+        self.lastCool = None
+        self.lastHeat = None
+        self.starttime = None
+        self.endtime = None
+        print "init HumidityControl for", self.thermostat.name
+
+    def Schedule(self, startHour = None, startMinute = None, runtime = None, frequency = None, cool = None, heat = None):
+        if startHour:
+            self.startHour = startHour
+        if startMinute:
+            self.startMinute = startMinute
+        if runtime:
+            self.runtime = runtime
+        if frequency:
+            self.frequency = frequency
+        if cool:
+            self.coolSet = cool
+        if heat:
+            self.heatSet = heat
+        now = datetime.datetime.now()
+        firstTime = now.replace(hour = self.startHour, minute = self.startMinute, second = 0, microsecond = 0) -\
+                    datetime.timedelta(days=7)
+        while firstTime < now:
+            firstTime += datetime.timedelta(seconds = self.frequency)
+        self.starttime = firstTime
+        self.endtime = firstTime + datetime.timedelta(seconds = self.runtime)
+        print "Humidity Start time:", self.starttime, self.thermostat.name
+        print "Humidity  End time:", self.endtime, self.thermostat.name
+        self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.runSystem, [True])
+        self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.runSystem, [False])
+
+    def runSystem(self, on):
+        self.lastCool = self.thermostat.getCoolSetpoint()
+        self.lastHeat = self.thermostat.getHeatSetpoint()
+        temperature = self.thermostat.getTemp()
+        if temperature > self.coolLimit:
+            cool = self.coolSet
+            heat = cool - 10
+        elif temperature < self.heatLimit:
+            heat = self.heatSet
+            cool = heat + 10
+        else:
+            cool = None
+            heat = None
+        #when to cool, when to heat???
+        if on:
+            print "Humidity Control On", datetime.datetime.now(), self.thermostat.name, "cool:", cool, "Heat:", heat
+            if not self.thermostat.scheduleOn:
+                self.thermostat.setThermostat(cool = cool, heat = heat)
+            else:
+                print "Skipped - schedule mode"
+            self.starttime = self.starttime + datetime.timedelta(seconds = self.frequency)
+            #print "Next fan on", self.starttime
+            self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.runSystem, [True])
+        else:
+            print "Humidity Control Off", datetime.datetime.now(), self.thermostat.name, "cool:",\
+                self.lastCool, "Heat:", self.lastHeat
+            self.thermostat.setThermostat(cool = self.lastCool, heat = self.lastHeat)
+            self.endtime = self.endtime + datetime.timedelta(seconds = self.frequency)
+            #print "Next fan off", self.starttime
+            self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.runSystem, [False])
 
                 
+class showStatus:
+    def __init__(self, thermostat, scheduler):
+        self.thermostat = thermostat
+        self.scheduler = scheduler
+        self.frequency = 5*60
+        self.offsetSeconds = 0
+        self.starttime = None
+        #self.endtime = None
+        print "init showStatus for", self.thermostat.name
+
+    def Schedule(self, offsetSeconds = None, frequency = None):
+        if offsetSeconds:
+            self.offsetSeconds = offsetSeconds
+        if frequency:
+            self.frequency = frequency
+        now = datetime.datetime.now()
+        firstTime = now.replace(hour = 0, minute = 0, second = self.offsetSeconds, microsecond = 0) -\
+                    datetime.timedelta(days = 7)
+        while firstTime < now:
+            firstTime += datetime.timedelta(seconds = self.frequency)
+        self.starttime = firstTime
+        print "showStatus Start time:", self.starttime, self.thermostat.name
+        self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.showStatus, ())
+
+    def showStatus(self):
+        self.thermostat.showStatusLine()
+        self.starttime = self.starttime + datetime.timedelta(seconds = self.frequency)
+        self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.showStatus, ())
+
 def main():
     
     up = Thermo(DEVICE_ID_UP, 'Upstairs')
@@ -377,28 +504,41 @@ def main():
 
     upCirculate = Circulate(up, scheduler)
     downCirculate = Circulate(down, scheduler)
-
     upCirculate.Schedule(startMinute = 0)
     downCirculate.Schedule(startMinute = 1)
-    
-    up.showStatusLong()
-    up.showStatusShort()
 
-    #scheduler.run()
-    
-    up.setThermostat(heat = 51)
-    time.sleep(31)
-    up.showStatusLine()
-    up.setThermostat(cool = 81)
-    time.sleep(31)
-    up.showStatusLine()
-    up.setThermostat(heat = 49, cool = 82)
-    time.sleep(31)
-    up.showStatusLine()
-    up.setThermostat(heat = 48, cool = 83, fan = 1)
-    time.sleep(31)
-    up.showStatusLine()
-    up.setThermostat(heat = 48, cool = 83, fan = 0)
+    upStatus = showStatus(up, scheduler)
+    downStatus = showStatus(down, scheduler)
+    upStatus.Schedule(offsetSeconds = 2)
+    downStatus.Schedule(offsetSeconds = 4)
+
+    upHumidity = HumidityControl(up, scheduler)
+    downHumidity = HumidityControl(down, scheduler)
+    upHumidity.Schedule(startHour = 6, startMinute = 30)
+    downHumidity.Schedule(startHour = 6, startMinute = 32)
+    upHumidity.Schedule(startHour = 11, startMinute = 35)
+    downHumidity.Schedule(startHour = 11, startMinute = 35)
+
+    up.showStatusLong()
+    down.showStatusLong()
+    up.showStatusShort()
+    down.showStatusShort()
+
+    scheduler.run()
+    if 0:
+        up.setThermostat(heat = 51)
+        time.sleep(31)
+        up.showStatusLine()
+        up.setThermostat(cool = 81)
+        time.sleep(31)
+        up.showStatusLine()
+        up.setThermostat(heat = 49, cool = 82)
+        time.sleep(31)
+        up.showStatusLine()
+        up.setThermostat(heat = 48, cool = 83, fan = 1)
+        time.sleep(31)
+        up.showStatusLine()
+        up.setThermostat(heat = 48, cool = 83, fan = 0)
     
     for i in range(10000):
         up.showStatusLine()
