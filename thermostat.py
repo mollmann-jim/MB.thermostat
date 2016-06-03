@@ -353,7 +353,7 @@ class Circulate:
         self.startMinute = 0
         self.starttime = None
         self.endtime = None
-        print "init Circulate for", self.thermostat.name
+        #print "init Circulate for", self.thermostat.name
 
     def Schedule(self, startMinute = None, runtime = None, frequency = None):
         if startMinute:
@@ -369,21 +369,21 @@ class Circulate:
             firstTime += datetime.timedelta(seconds = self.frequency)
         self.starttime = firstTime
         self.endtime = firstTime + datetime.timedelta(seconds = self.runtime)
-        print "Fan Start time:", self.starttime, self.thermostat.name
-        print "Fan   End time:", self.endtime, self.thermostat.name
+        #print "Fan Start time:", self.starttime, self.thermostat.name
+        #print "Fan   End time:", self.endtime, self.thermostat.name
         self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.FanStart, [True])
         self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.FanStart, [False])
 
     def FanStart(self, on):
         if on:
-            print "Fan On", datetime.datetime.now(), self.thermostat.name
-            if self.thermostat.scheduleOn:
+            #print "Fan On", datetime.datetime.now(), self.thermostat.name
+            if self.thermostat.scheduleOn():
                 self.thermostat.setThermostat(fan = True)
             self.starttime = self.starttime + datetime.timedelta(seconds = self.frequency)
             #print "Next fan on", self.starttime
             self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.FanStart, [True])
         else:
-            print "Fan Off", datetime.datetime.now(), self.thermostat.name
+            #print "Fan Off", datetime.datetime.now(), self.thermostat.name
             self.thermostat.setThermostat(fan = False)
             self.endtime = self.endtime + datetime.timedelta(seconds = self.frequency)
             #print "Next fan off", self.starttime
@@ -406,7 +406,7 @@ class HumidityControl:
         self.lastHeat = None
         self.starttime = None
         self.endtime = None
-        print "init HumidityControl for", self.thermostat.name
+        #print "init HumidityControl for", self.thermostat.name
 
     def Schedule(self, startHour = None, startMinute = None, runtime = None, frequency = None, cool = None, heat = None):
         if startHour:
@@ -434,8 +434,6 @@ class HumidityControl:
         self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.runSystem, [False])
 
     def runSystem(self, on):
-        self.lastCool = self.thermostat.getCoolSetpoint()
-        self.lastHeat = self.thermostat.getHeatSetpoint()
         temperature = self.thermostat.getTemp()
         if temperature > self.coolLimit:
             cool = self.coolSet
@@ -448,8 +446,10 @@ class HumidityControl:
             heat = None
         #when to cool, when to heat???
         if on:
+            self.lastCool = self.thermostat.getCoolSetpoint()
+            self.lastHeat = self.thermostat.getHeatSetpoint()
             print "Humidity Control On", datetime.datetime.now(), self.thermostat.name, "cool:", cool, "Heat:", heat
-            if not self.thermostat.scheduleOn:
+            if not self.thermostat.scheduleOn():
                 self.thermostat.setThermostat(cool = cool, heat = heat)
             else:
                 print "Skipped - schedule mode"
@@ -473,7 +473,7 @@ class showStatus:
         self.offsetSeconds = 0
         self.starttime = None
         #self.endtime = None
-        print "init showStatus for", self.thermostat.name
+        #print "init showStatus for", self.thermostat.name
 
     def Schedule(self, offsetSeconds = None, frequency = None):
         if offsetSeconds:
@@ -486,7 +486,7 @@ class showStatus:
         while firstTime < now:
             firstTime += datetime.timedelta(seconds = self.frequency)
         self.starttime = firstTime
-        print "showStatus Start time:", self.starttime, self.thermostat.name
+        #print "showStatus Start time:", self.starttime, self.thermostat.name
         self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.showStatus, ())
 
     def showStatus(self):
@@ -516,8 +516,8 @@ def main():
     downHumidity = HumidityControl(down, scheduler)
     upHumidity.Schedule(startHour = 6, startMinute = 30)
     downHumidity.Schedule(startHour = 6, startMinute = 32)
-    upHumidity.Schedule(startHour = 11, startMinute = 35)
-    downHumidity.Schedule(startHour = 11, startMinute = 35)
+    #upHumidity.Schedule(startHour = 11, startMinute = 35)
+    #downHumidity.Schedule(startHour = 11, startMinute = 35)
 
     up.showStatusLong()
     down.showStatusLong()
