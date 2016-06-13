@@ -1,9 +1,16 @@
 #!/usr/bin/env python
 
+# Jim Mollmann
+# original:
 # By Brad Goodman
 # http://www.bradgoodman.com/
 # brad@bradgoodman.com
 
+# To Do:
+# error recovery on network calls
+# weather?
+# fail-safe "off" calls
+# status data to DB
 import urllib2
 import urllib
 import json
@@ -14,6 +21,7 @@ import math
 import base64
 import time
 import httplib
+import socket
 import sys
 import getopt
 import os
@@ -157,6 +165,40 @@ class Thermo:
             s+='%s=%s;' % (x,jar[x])
         return s
 
+    def myHTTPrequest(self, host, method, url, body, headers, reauthorize = False):
+        retries = 3
+        for attempt in range(retries):
+            print attempt, ':', method, url
+            try:
+                conn = httplib.HTTPSConnection(host)
+                conn.request(method, url, body, headers)
+            except (httplib.HTTPException, socket.error) as detail:
+                print("myHTTPrequest socket.error:{0}".format(detail))
+                print attempt
+                if (attempt == (retries-1)):
+                    print "third try failed too"
+                    raise
+            else:
+                response = conn.getresponse()
+                status = response.status
+                print "status:", status
+                if (status == 200):
+                    pass
+                elif (status == 302):
+                    pass
+                else:
+                    print("Error Didn't get 200 status on {2} {3} status={0} {1}".\
+                          format(response.status,response.reason, method, url))
+                    if ((status == 401) or (status == 500)) and (reauthorize):
+                        print "Retrying get_login() try:", attempt
+                        self.get_login()
+                        print "After get_login() retry", attempt
+                        continue
+                print "returning response"
+                return response
+        print "All 3 attempts are done. Return None"
+        return None
+
     def get_login(self):
         #print "get_login"
         cookiejar=None
@@ -171,9 +213,10 @@ class Thermo:
                  "Origin":"https://mytotalconnectcomfort.com/portal",
                  "User-Agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/28.0.1500.95 Safari/537.36"
         }
-        conn = httplib.HTTPSConnection("mytotalconnectcomfort.com")
-        conn.request("GET", "/portal/",None,headers)
-        r0 = conn.getresponse()
+        #conn = httplib.HTTPSConnection("mytotalconnectcomfort.com")
+        #conn.request("GET", "/portal/",None,headers)
+        #r0 = conn.getresponse()
+        r0 = self.myHTTPrequest("mytotalconnectcomfort.com", "GET", "/portal/", None, headers)
         #print r0.status, r0.reason
   
         for x in r0.getheaders():
@@ -201,9 +244,10 @@ class Thermo:
                  "Cookie":newcookie,
                  "User-Agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/28.0.1500.95 Safari/537.36"
         }
-        conn = httplib.HTTPSConnection("mytotalconnectcomfort.com")
-        conn.request("POST", "/portal/",params,headers)
-        r1 = conn.getresponse()
+        #conn = httplib.HTTPSConnection("mytotalconnectcomfort.com")
+        #conn.request("POST", "/portal/",params,headers)
+        #r1 = conn.getresponse()
+        r1 = self.myHTTPrequest("mytotalconnectcomfort.com", "POST", "/portal/", params, headers)
         #print r1.status, r1.reason
     
         for x in r1.getheaders():
@@ -248,20 +292,26 @@ class Thermo:
             "User-Agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/28.0.1500.95 Safari/537.36",
             "Cookie":self.cookie
         }
-        conn = httplib.HTTPSConnection("mytotalconnectcomfort.com")
+        #conn = httplib.HTTPSConnection("mytotalconnectcomfort.com")
         #conn.set_debuglevel(999);
         #print "LOCATION R3 is",location
-        conn.request("GET", location,None,headers)
-        r3 = conn.getresponse()
-        if (r3.status != 200):
-            print("Error Didn't get 200 status on R3 status={0} {1}".format(r3.status,r3.reason))
-            return
-
+        #conn.request("GET", location,None,headers)
+        #r3 = conn.getresponse()
+        #if (r3.status != 200):
+        #    print("Error Didn't get 200 status on R3 status={0} {1}".format(r3.status,r3.reason))
+        #    return
+        r3 = self.myHTTPrequest("mytotalconnectcomfort.com", "GET", location, None, headers, reauthorize = True)
         # Print thermostat information returned
     
         #print r3.status, r3.reason
         rawdata=r3.read()
-        j = json.loads(rawdata)
+        if self.statusLineNum % 10 == 0:
+            print "sample rawdata:", rawdata
+        try:
+            j = json.loads(rawdata)
+        except:
+            print "error rawdata:", rawdata
+            raise
         #print "R3 Dump"
         #print json.dumps(j,indent=2)
         #print json.dumps(j,sort_keys=True,indent=4, separators=(',', ': '))
@@ -329,19 +379,20 @@ class Thermo:
 
         rawj=json.dumps(payload)
   
-        conn = httplib.HTTPSConnection("mytotalconnectcomfort.com");
+        #conn = httplib.HTTPSConnection("mytotalconnectcomfort.com");
         #conn.set_debuglevel(999);
         #print "R4 will send"
         #print rawj
-        conn.request("POST", location,rawj,headers)
-        r4 = conn.getresponse()
-        if (r4.status != 200): 
-            print("Error Didn't get 200 status on R4 status={0} {1}".format(r4.status,r4.reason))
-            return
-        else:
+        #conn.request("POST", location,rawj,headers)
+        #r4 = conn.getresponse()
+        #if (r4.status != 200): 
+        #    print("Error Didn't get 200 status on R4 status={0} {1}".format(r4.status,r4.reason))
+        #    return
+        #else:
             #print "Success in configuring thermostat!"
             #  print "R4 got 200"
-            pass
+        #    pass
+        r4 = self.myHTTPrequest("mytotalconnectcomfort.com", "POST", location, rawj, headers, reauthorize = True)
 
 class Circulate:
 
