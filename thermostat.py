@@ -29,6 +29,7 @@ import stat
 import subprocess
 import string
 import sched
+import random
 
 try:
     import therm_auth
@@ -167,21 +168,30 @@ class Thermo:
 
     def myHTTPrequest(self, host, method, url, body, headers, reauthorize = False):
         retries = 3
+        delay = 2
         for attempt in range(retries):
-            print attempt, ':', method, url
+            #print attempt, ':', method, url
             try:
                 conn = httplib.HTTPSConnection(host)
                 conn.request(method, url, body, headers)
             except (httplib.HTTPException, socket.error) as detail:
+                print attempt, ':', method, url
                 print("myHTTPrequest socket.error:{0}".format(detail))
-                print attempt
+                #print attempt
+                time.sleep(delay)
+                delay *= delay
                 if (attempt == (retries-1)):
                     print "third try failed too"
                     raise
             else:
                 response = conn.getresponse()
                 status = response.status
-                print "status:", status
+                #print "status:", status
+                if (status == 200):
+                    if reauthorize:
+                        if random.randint(0,9) == 10:
+                            print "Set status to 401 for testing"
+                            status = 401
                 if (status == 200):
                     pass
                 elif (status == 302):
@@ -189,12 +199,16 @@ class Thermo:
                 else:
                     print("Error Didn't get 200 status on {2} {3} status={0} {1}".\
                           format(response.status,response.reason, method, url))
+                    print attempt, ':', method, url
                     if ((status == 401) or (status == 500)) and (reauthorize):
                         print "Retrying get_login() try:", attempt
                         self.get_login()
+                        print "old Headers:", headers
+                        headers['Cookie'] = self.cookie
+                        print "new Headers:", headers
                         print "After get_login() retry", attempt
                         continue
-                print "returning response"
+                #print "returning response"
                 return response
         print "All 3 attempts are done. Return None"
         return None
