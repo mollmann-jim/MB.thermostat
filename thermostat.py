@@ -30,6 +30,7 @@ import subprocess
 import string
 import sched
 import random
+import sqlite3
 
 try:
     import therm_auth
@@ -110,10 +111,9 @@ class Thermo:
                 format('Date Time', 'Temp', ' Set', ' Set', 'Until', 'Status', 'Status', 'Status', 'On', 'Status',\
                        'Mode', ' ')
         print '{11:10s} {0:^20s} {1:4d} {2:4d} {3:4d} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^7s} {9:^6s} {10:^8s}'.\
-            format(str(self.whenStatus), int(self.temperature), int(self.coolSet), int(self.heatSet), until,\
-                   self.strStatus[self.coolStatus], self.strStatus[self.heatStatus], self.strFan[self.fanStatus],\
-                   str(self.fanOn), self.strOutputStatus[self.outputStatus], self.strSwitchPosition[self.switchPosition],\
-                   self.name)
+            format(str(self.whenStatus), self.getTemp(), self.getCoolSetpoint(), self.getHeatSetpoint(),\
+                   self.getHoldUntil(),  self.getCoolStatus(), self.getHeatStatus(), self.getFanStatus(),\
+                   str(self.fanOn), self.getOutputStatus(), self.getSwitchPosition(), self.name)
         self.statusLineNum += 1
         
     def staleStatus(self):
@@ -131,19 +131,52 @@ class Thermo:
 
     def getCoolSetpoint(self):
         self.getStatus()
-        return self.coolSet
+        return int(self.coolSet)
 
     def getHeatSetpoint(self):
         self.getStatus()
-        return self.heatSet
+        return int(self.heatSet)
 
     def getTemp(self):
         self.getStatus()
-        return self.temperature
+        return int(self.temperature)
+
+    def getStatusWhen(self):
+        self.getStatus()
+        return self.whenStatus
+
+    def getHoldUntil(self):
+        self.getStatus()
+        untilHH = self.holdUntil / 60
+        untilMM = self.holdUntil % 60
+        until = "{0:02d}:{1:02d}".format(untilHH, untilMM)
+        if self.holdUntil == 0:
+            until = '     '
+        return until
+
+    def getCoolStatus(self):
+        self.getStatus()
+        return self.strStatus[self.coolStatus]
+    
+    def getHeatStatus(self):
+        self.getStatus()
+        return self.strStatus[self.heatStatus]
+
+    def getFanStatus(self):
+        self.getStatus()
+        return self.strFan[self.fanStatus]
+
+    def getOutputStatus(self):
+        self.getStatus()
+        return self.strOutputStatus[self.outputStatus]
+
+    def getSwitchPosition(self):
+        self.getStatus()
+        return self.strSwitchPosition[self.switchPosition]
     
     def client_cookies(self, cookiestr, container):
         if not container: container={}
-        print "cookiestr - ",cookiestr
+        #print "cookiestr - ",cookiestr
         toks=re.split(';|,',cookiestr)
         for t in toks:
             k=None
@@ -187,11 +220,6 @@ class Thermo:
                 response = conn.getresponse()
                 status = response.status
                 #print "status:", status
-                if (status == 200):
-                    if reauthorize:
-                        if random.randint(0,9) == 10:
-                            print "Set status to 401 for testing"
-                            status = 401
                 if (status == 200):
                     pass
                 elif (status == 302):
@@ -270,7 +298,7 @@ class Thermo:
             if (n.lower() == "set-cookie"): 
                 cookiejar=self.client_cookies(v,cookiejar)
                 self.cookie=self.export_cookiejar(cookiejar)
-        print "Cookiejar now",self.cookie
+        #print "Cookiejar now",self.cookie
         location = r1.getheader("Location")
         
         if ((location == None) or (r1.status != 302)):
@@ -319,8 +347,6 @@ class Thermo:
     
         #print r3.status, r3.reason
         rawdata=r3.read()
-        if self.statusLineNum % 10 == 0:
-            print "sample rawdata:", rawdata
         try:
             j = json.loads(rawdata)
         except:
@@ -489,10 +515,13 @@ class HumidityControl:
         now = datetime.datetime.now()
         firstTime = now.replace(hour = self.startHour, minute = self.startMinute, second = 0, microsecond = 0) -\
                     datetime.timedelta(days=7)
+        firstEnd = firstTime + datetime.timedelta(seconds = self.runtime)
         while firstTime < now:
             firstTime += datetime.timedelta(seconds = self.frequency)
         self.starttime = firstTime
-        self.endtime = firstTime + datetime.timedelta(seconds = self.runtime)
+        while firstEnd < now:
+            firstEnd += datetime.timedelta(seconds = self.frequency)
+        self.endtime = firstEnd
         print "Humidity Start time:", self.starttime, self.thermostat.name
         print "Humidity  End time:", self.endtime, self.thermostat.name
         self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.runSystem, [True])
@@ -513,17 +542,18 @@ class HumidityControl:
         if on:
             self.lastCool = self.thermostat.getCoolSetpoint()
             self.lastHeat = self.thermostat.getHeatSetpoint()
-            print "Humidity Control On", datetime.datetime.now(), self.thermostat.name, "cool:", cool, "Heat:", heat
+            #print "Humidity Control On", datetime.datetime.now(), self.thermostat.name, "cool:", cool, "Heat:", heat
             if not self.thermostat.scheduleOn():
                 self.thermostat.setThermostat(cool = cool, heat = heat)
             else:
-                print "Skipped - schedule mode"
+                #print "Skipped - schedule mode"
+                pass
             self.starttime = self.starttime + datetime.timedelta(seconds = self.frequency)
             #print "Next fan on", self.starttime
             self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.runSystem, [True])
         else:
-            print "Humidity Control Off", datetime.datetime.now(), self.thermostat.name, "cool:",\
-                self.lastCool, "Heat:", self.lastHeat
+            #print "Humidity Control Off", datetime.datetime.now(), self.thermostat.name, "cool:",\
+            #    self.lastCool, "Heat:", self.lastHeat
             self.thermostat.setThermostat(cool = self.lastCool, heat = self.lastHeat)
             self.endtime = self.endtime + datetime.timedelta(seconds = self.frequency)
             #print "Next fan off", self.starttime
@@ -558,7 +588,77 @@ class showStatus:
         self.thermostat.showStatusLine()
         self.starttime = self.starttime + datetime.timedelta(seconds = self.frequency)
         self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.showStatus, ())
+        
+class logStatus:
+    def __init__(self, thermostat, scheduler):
+        self.thermostat = thermostat
+        self.scheduler = scheduler
+        self.frequency = 5*60
+        self.offsetSeconds = 0
+        self.starttime = None
+        self.table = self.thermostat.name
+        self.DBname = '/home/jim/tools/Honeywell/MBthermostat.sql'
+        self.sqlite = sqlite3.connect(self.DBname)
+        if False:
+            drop = "DROP TABLE IF EXISTS " + self.table
+            print drop
+            self.sqlite.execute(drop)
+            self.sqlite.commit()
+        create = "CREATE TABLE IF NOT EXISTS " + self.table + "(" +\
+                 " id             INTEGER PRIMARY KEY, " +\
+                 " timestamp      INTEGER DEFAULT CURRENT_TIMESTAMP, " +\
+                 " statusTime     INTEGER, " +\
+                 " temp           INTEGER, " +\
+                 " coolSetPoint   INTEGER, " +\
+                 " heatSetPoint   INTEGER, " +\
+                 " holdUntil      TEXT,    " +\
+                 " coolStatus     TEXT,    " +\
+                 " heatStatus     TEXT,    " +\
+                 " fanStatus      TEXT,    " +\
+                 " fanOn          INTEGER, " +\
+                 " outputStatus   TEXT,    " +\
+                 " switchPosition TEXT     " +\
+                 " )"
+        #print create
+        self.sqlite.execute(create)                 
 
+    def Schedule(self, offsetSeconds = None, frequency = None):
+        if offsetSeconds:
+            self.offsetSeconds = offsetSeconds
+        if frequency:
+            self.frequency = frequency
+        now = datetime.datetime.now()
+        firstTime = now.replace(hour = 0, minute = 0, second = self.offsetSeconds, microsecond = 0) -\
+                    datetime.timedelta(days = 7)
+        while firstTime < now:
+            firstTime += datetime.timedelta(seconds = self.frequency)
+        self.starttime = firstTime
+        #print "showStatus Start time:", self.starttime, self.thermostat.name
+        self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.logStatus, ())
+
+    def logStatus(self):
+        row = "INSERT INTO " + self.table + "(statusTime, temp, coolSetPoint, heatSetPoint, holdUntil, " +\
+              "coolStatus, heatStatus, fanStatus, fanOn, outputStatus, switchPosition) VALUES(" +\
+              "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        #print row
+        values = (self.thermostat.getStatusWhen(), \
+                  self.thermostat.getTemp(), \
+                  self.thermostat.getCoolSetpoint(), \
+                  self.thermostat.getHeatSetpoint(), \
+                  self.thermostat.getHoldUntil(), \
+                  self.thermostat.getCoolStatus(), \
+                  self.thermostat.getHeatStatus(), \
+                  self.thermostat.getFanStatus(), \
+                  self.thermostat.fanOn, \
+                  self.thermostat.getOutputStatus(), \
+                  self.thermostat.getSwitchPosition() \
+        )
+        #print values
+        self.sqlite.execute(row, values)
+        self.sqlite.commit()
+        self.starttime = self.starttime + datetime.timedelta(seconds = self.frequency)
+        self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.logStatus, ())
+        
 def main():
     
     up = Thermo(DEVICE_ID_UP, 'Upstairs')
@@ -584,31 +684,17 @@ def main():
     #upHumidity.Schedule(startHour = 11, startMinute = 35)
     #downHumidity.Schedule(startHour = 11, startMinute = 35)
 
-    up.showStatusLong()
-    down.showStatusLong()
-    up.showStatusShort()
-    down.showStatusShort()
+    upLog = logStatus(up, scheduler)
+    downLog = logStatus(down, scheduler)
+    upLog.Schedule(offsetSeconds = 1)
+    downLog.Schedule(offsetSeconds = 3)
+
+    #up.showStatusLong()
+    #down.showStatusLong()
+    #up.showStatusShort()
+    #down.showStatusShort()
 
     scheduler.run()
-    if 0:
-        up.setThermostat(heat = 51)
-        time.sleep(31)
-        up.showStatusLine()
-        up.setThermostat(cool = 81)
-        time.sleep(31)
-        up.showStatusLine()
-        up.setThermostat(heat = 49, cool = 82)
-        time.sleep(31)
-        up.showStatusLine()
-        up.setThermostat(heat = 48, cool = 83, fan = 1)
-        time.sleep(31)
-        up.showStatusLine()
-        up.setThermostat(heat = 48, cool = 83, fan = 0)
-    
-    for i in range(10000):
-        up.showStatusLine()
-        time.sleep(300)
-        
         
 if __name__ == '__main__':
   main()
