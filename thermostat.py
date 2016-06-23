@@ -456,10 +456,13 @@ class Circulate:
         now = datetime.datetime.now()
         firstTime = now.replace(hour = 0, minute = self.startMinute, second = 0, microsecond = 0) -\
                     datetime.timedelta(days=7)
+        firstEnd = firstTime + datetime.timedelta(seconds = self.runtime)
         while firstTime < now:
             firstTime += datetime.timedelta(seconds = self.frequency)
         self.starttime = firstTime
-        self.endtime = firstTime + datetime.timedelta(seconds = self.runtime)
+        while firstEnd < now:
+            firstEnd += datetime.timedelta(seconds = self.frequency)
+        self.endtime = firstEnd
         #print "Fan Start time:", self.starttime, self.thermostat.name
         #print "Fan   End time:", self.endtime, self.thermostat.name
         self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.FanStart, [True])
