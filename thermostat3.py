@@ -69,6 +69,7 @@ class Thermo:
         self.strOutputStatus = ['off', 'heat on', 'cool on', 'undefined' ]
         self.cookiere = re.compile('\s*([^=]+)\s*=\s*([^;]*)\s*')
         self.table = 'savedStatus'
+        self.cursor = None
         self.sqlite = self.initSavedStatus()
 
     def initSavedStatus(self):
@@ -87,12 +88,14 @@ class Thermo:
                  " )"
         #print(create)
         sqlite.execute(create)
+        sqlite.row_factory = sqlite3.Row
+        self.cursor = sqlite.cursor()
         # make an initial record
         insert = "INSERT OR IGNORE INTO " +\
                  self.table + "(thermostat) " +\
                  " VALUES('" + self.name +"')"
         #print(insert)
-        sqlite.execute(insert)
+        self.cursor.execute(insert)
         sqlite.commit()
         return sqlite
 
@@ -121,12 +124,15 @@ class Thermo:
                   self.name \
                   )
         #print(values)
-        self.sqlite.execute(update, values)
+        self.cursor.execute(update, values)
         self.sqlite.commit()
 
     def getSavedStatus(self):
-        pass
-                  
+        select = "SELECT * from " + self.table + " WHERE thermostat=?"
+        #print(select)
+        self.cursor.execute(select, (self.name,))
+        row = self.cursor.fetchone()
+        return row
 
     def showStatusLong(self):
         self.getStatus()
@@ -256,7 +262,7 @@ class Thermo:
         return s
 
     def myHTTPrequest(self, host, method, url, body, headers, reauthorize = False):
-        retries = 3
+        retries = 5
         delay = 2
         for attempt in range(retries):
             #print attempt, ':', method, url
@@ -405,6 +411,9 @@ class Thermo:
         rawdata=r3.read().decode('utf-8')
         try:
             j = json.loads(rawdata)
+        except (ValueError):
+            print("json ValueError:", rawdata)
+            return False
         except:
             print("error rawdata:", rawdata)
             raise
@@ -426,9 +435,17 @@ class Thermo:
         self.coolNextPeriod = j['latestData']['uiData']['CoolNextPeriod']
         self.heatNextPeriod = j['latestData']['uiData']['HeatNextPeriod']
         self.whenStatus = t.replace(microsecond = 0) # close enough
-        self.saveStatus()
+        return True
+
+    def getStatusRetry(self, now = True, retries = 5):
+        for attempt in range(retries):
+            if (self.getStatus(now)):
+                return
+            print("getStatus try ", attempt)
+        print("Failed to getStatus for ", self.name, " in ", retries, " tries")
         
-    def setThermostat(self, heat=None, cool=None, fan=None):
+    def setThermostat(self, heat=None, cool=None, fan=None, coolNext=None, heatNext=None,\
+                      statusCool=None, statusHeat=None, switch=None):
         headers={
             "Accept":'application/json; q=0.01',
             "DNT":"1",
@@ -446,15 +463,15 @@ class Thermo:
         }
          # Data structure with data we will send back
         payload = {
-            "CoolNextPeriod": None,
-            "CoolSetpoint": None,
+            "CoolNextPeriod": self.coolNextPeriod,
+            "CoolSetpoint": self.coolSet,
             "DeviceID": self.DEVICE_ID,
-            "FanMode": None,
-            "HeatNextPeriod": None,
-            "HeatSetpoint": None,
-            "StatusCool": None,
-            "StatusHeat": None,
-            "SystemSwitch": 4,  # auto
+            "FanMode": self.fanStatus,
+            "HeatNextPeriod": self.heatNextPeriod,
+            "HeatSetpoint": self.heatSet,
+            "StatusCool": self.coolStatus,
+            "StatusHeat": self.heatStatus,
+            "SystemSwitch": self.switchPosition
         }
         # Calculate the hold time for cooling/heating
         #t = datetime.datetime.now();
@@ -467,11 +484,18 @@ class Thermo:
             payload['HeatSetpoint'] = heat
         if cool:
             payload['CoolSetpoint'] = cool
-        if fan:
-            payload['FanMode'] = 1
-        else:
-            payload['FanMode'] = 0
-
+        if fan != None:
+            payload['FanMode'] = fan
+        if coolNext:
+            payload['CoolNextPeriod'] = coolNext
+        if heatNext:
+            payload['HeatNextPeriod'] = heatNext
+        if statusCool:
+            payload['StatusCool'] = statusCool
+        if statusHeat:
+            payload['StatusHeat'] = statusHeat
+        if switch:
+            payload['SystemSwitch'] = switch 
         # Prep and send payload
             
         location="/portal/Device/SubmitControlScreenChanges"
@@ -528,16 +552,22 @@ class Circulate:
         self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.FanStart, [False])
 
     def FanStart(self, on):
+        self.thermostat.getStatusRetry()
         if on:
-            #print "Fan On", datetime.datetime.now(), self.thermostat.name
             if self.thermostat.scheduleOn():
+                self.thermostat.saveStatus()
+                #print "Fan On", datetime.datetime.now(), self.thermostat.name
                 self.thermostat.setThermostat(fan = True)
             self.starttime = self.starttime + datetime.timedelta(seconds = self.frequency)
             #print "Next fan on", self.starttime
             self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.FanStart, [True])
         else:
-            #print "Fan Off", datetime.datetime.now(), self.thermostat.name
-            self.thermostat.setThermostat(fan = False)
+            if self.thermostat.scheduleOn():
+                saved = self.thermostat.getSavedStatus()
+                #print "Fan Off", datetime.datetime.now(), self.thermostat.name
+                # if the fan is already off, let it be
+                if self.thermostat.fanStatus != 0:
+                    self.thermostat.setThermostat(fan = saved['fanStatus'])
             self.endtime = self.endtime + datetime.timedelta(seconds = self.frequency)
             #print "Next fan off", self.starttime
             self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.FanStart, [False])
@@ -555,8 +585,8 @@ class HumidityControl:
         self.heatSet = 72
         self.coolLimit = 65
         self.heatLimit = 68
-        self.lastCool = None
-        self.lastHeat = None
+        self.myCool = None
+        self.myHeat = None
         self.starttime = None
         self.endtime = None
         #print "init HumidityControl for", self.thermostat.name
@@ -590,6 +620,7 @@ class HumidityControl:
         self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.runSystem, [False])
 
     def runSystem(self, on):
+        self.thermostat.getStatusRetry()
         temperature = self.thermostat.getTemp()
         if temperature > self.coolLimit:
             cool = self.coolSet
@@ -600,23 +631,29 @@ class HumidityControl:
         else:
             cool = None
             heat = None
+        self.myCool = cool
+        self.myHeat = heat
         #when to cool, when to heat???
         if on:
-            self.lastCool = self.thermostat.getCoolSetpoint()
-            self.lastHeat = self.thermostat.getHeatSetpoint()
             #print "Humidity Control On", datetime.datetime.now(), self.thermostat.name, "cool:", cool, "Heat:", heat
             if not self.thermostat.scheduleOn():
+                self.thermostat.saveStatus()
                 self.thermostat.setThermostat(cool = cool, heat = heat)
-            else:
-                #print "Skipped - schedule mode"
-                pass
             self.starttime = self.starttime + datetime.timedelta(seconds = self.frequency)
             #print "Next fan on", self.starttime
             self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.runSystem, [True])
         else:
-            #print "Humidity Control Off", datetime.datetime.now(), self.thermostat.name, "cool:",\
-            #    self.lastCool, "Heat:", self.lastHeat
-            self.thermostat.setThermostat(cool = self.lastCool, heat = self.lastHeat)
+            if not self.thermostat.scheduleOn():
+                saved = self.thermostat.getSavedStatus()
+                if self.myCool == self.thermostat.getCoolSetpoint():
+                    cool = saved['coolSetPoint']
+                else:
+                    cool = self.thermostat.getCoolSetpoint()
+                if self.myHeat == self.thermostat.getHeatSetpoint():
+                    heat = saved['heatSetPoint']
+                else:
+                    heat = self.thermostat.getHeatSetpoint()
+                self.thermostat.setThermostat(cool = cool, heat = heat)
             self.endtime = self.endtime + datetime.timedelta(seconds = self.frequency)
             #print "Next fan off", self.starttime
             self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.runSystem, [False])
@@ -660,11 +697,6 @@ class logStatus:
         self.starttime = None
         self.table = self.thermostat.name
         self.sqlite = sqlite3.connect(DBname)
-        if False:
-            drop = "DROP TABLE IF EXISTS " + self.table
-            print(drop)
-            self.sqlite.execute(drop)
-            self.sqlite.commit()
         create = "CREATE TABLE IF NOT EXISTS " + self.table + "(" +\
                  " id             INTEGER PRIMARY KEY, " +\
                  " timestamp      INTEGER DEFAULT CURRENT_TIMESTAMP, " +\
@@ -721,7 +753,7 @@ class logStatus:
         self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.logStatus, ())
         
 def main():
-    
+
     up = Thermo(DEVICE_ID_UP, 'Upstairs')
     down = Thermo(DEVICE_ID_DOWN, 'Downstairs')
     
