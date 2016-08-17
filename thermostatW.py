@@ -31,6 +31,7 @@ import string
 import sched
 import random
 import sqlite3
+import math
 
 try:
     import therm_auth
@@ -38,6 +39,7 @@ try:
     PASSWORD = therm_auth.PASSWORD
     DEVICE_ID_UP = therm_auth.DEVICE_ID_UP
     DEVICE_ID_DOWN = therm_auth.DEVICE_ID_DOWN
+    WEATHER_KEY = therm_auth.OPEN_WEATHER_MAP_key
 except:
     pass
 
@@ -758,6 +760,145 @@ class logStatus:
         self.sqlite.commit()
         self.starttime = self.starttime + datetime.timedelta(seconds = self.frequency)
         self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.logStatus, ())
+
+class Weather:
+    def __init__(self, location = 4598678):
+        self.temp = None
+        self.name = None
+        self.pressure = None
+        self.humidity = None
+        self.wind = None
+        self.direction = None
+        self.weather = None
+        self.description = None
+        self.dewpoint = None
+        self.when = None
+        self.locationID = location
+        self.where = 'id=' + str(location) + '&APPID=' + WEATHER_KEY
+        self.degCtoK=273.15        # Temperature offset between K and C (deg C)
+        self.table = 'weather'
+        self.sqlite = sqlite3.connect(DBname)
+        create = "CREATE TABLE IF NOT EXISTS " + self.table + "(" +\
+                 " id             INTEGER PRIMARY KEY, " +\
+                 " timestamp      INTEGER DEFAULT CURRENT_TIMESTAMP, " +\
+                 " obsTime        INTEGER, " +\
+                 " temp           INTEGER, " +\
+                 " pressure       REAL,    " +\
+                 " humidity       INTEGER, " +\
+                 " dewpoint       INTEGER, " +\
+                 " wind           INTEGER, " +\
+                 " directiom      INTEGER, " +\
+                 " locationID     INTEGER, " +\
+                 " weather        TEXT,    " +\
+                 " description    TEXT,    " +\
+                 " name           TEXT     " +\
+                 " )"
+        #print create
+        self.sqlite.execute(create)   
+
+    def CtoF(self, T):
+        return (T * 1.8) + 32
+
+    def FtoC(self, T):
+        return (T -32) / 1.8
+
+    def CtoK(self, T):
+        return T + self.degCtoK
+
+    def KtoC(self, T):
+        return T - self.degCtoK
+
+    def getConstants(self, T):
+        if ((T > -40.) and (T <= 0.)):
+            return [6.1121, 17.368, 238.88, 234.5]
+        elif ((T > 0.) and (T <= 50.)):
+            return [6.1121, 17.996, 247.15, 234.5]
+        else:
+            return [6.1121, 18.678, 257.14, 234.5]
+
+    def dewPoint(self, T_K, RH):
+        T = self.KtoC(T_K)
+        a, b, c, d = self.getConstants(T)
+        exponent = (b - (T/d)) * (T/(c + T))
+        gamma = math.log((RH/100.) * math.exp(exponent))
+        T_d = (c * gamma) / (b - gamma)
+        return T_d
+
+    def getWeather(self):
+        """ call openweathermap api"""
+        try:
+            response = urllib.request.urlopen('http://api.openweathermap.org/data/2.5/weather?' + self.where)
+            openWeather = response.read().decode('utf-8')
+            w = json.loads(openWeather)
+            #print (json.dumps(w, indent=2))
+            T_K = self.pressure = self.humidity = self.dewpoint = self.wind = self.direction = self.when = 0
+            self.name = w.get('name')
+            main = w.get('main')
+            if main is not None:
+                T_K = float(main.get('temp', 0))
+                self.temp = int(self.CtoF(self.KtoC(T_K)) + 0.5)
+                self.pressure =  0.02953 * main.get('pressure', 0)
+                self.humidity = int(main.get('humidity', 0) + 0.5)
+                self.dewpoint = int(self.CtoF(int(self.dewPoint(T_K, self.humidity) + 0.5)))
+                Xpressure = main.get('pressure', 0)
+                Xhumidity = main.get('humidity', 0)
+            else:
+                print ("main:", json.dumps(w, indent=2))
+            wind = w.get('wind')
+            if wind is not None:
+                self.wind = int(2.23694 * wind.get('speed') + 0.5)
+                self.direction = int(wind.get('deg'))
+                Xwind = wind.get('speed')
+            else:
+                print ("wind:", json.dumps(w, indent=2))
+            weather = w.get('weather')
+            if weather is not None:
+                w0 = weather[0]
+                self.weather = w0.get('main')
+                self.description = w0.get('description')
+                if len(weather) > 1:
+                    print("weather len > 1:", weather)
+            else:
+                print (json.dumps(w, indent=2))
+            when = w.get('dt')
+            if when is not None:
+                self.when = datetime.datetime.fromtimestamp(when)
+            else:
+                print ("when:", json.dumps(w, indent=2))
+            Xdt = w.get('dt')
+            if (T_K * self.pressure * self.humidity * self.dewpoint * self.wind * self.direction) == 0:
+                print ("00000:", json.dumps(w, indent=2))
+            t = datetime.datetime.now().replace(microsecond = 0)
+            print(t, self.temp, self.name, '{:5.2f}'.format(self.pressure), self.humidity, self.wind, \
+                  self.direction, self.weather, self.description, self.dewpoint, self.when, self.locationID)
+            #                   date     name   temp   humid  dew    press      wind   dir
+            tempFormatMine = '{0:^20s} {1:15s} {2:6d} {3:3d} {4:3d}  {5:7.2f} {6:6d} {7:3d} {8:10s} {9:20s} {10:8.0f} {11:20s}'
+            tempFormatIn   = '{0:^20s} {1:15s} {2:6.2f} {3:3d} {4:4s} {5:7.2f} {6:6.2f} {7:3s} {8:10s} {9:20s} {10:8s} {11:^20d}'
+            print(tempFormatMine.format(str(t), self.name, self.temp, self.humidity, self.dewpoint, self.pressure, \
+                                        self.wind, self.direction, self.weather, self.description, \
+                                        self.locationID, str(self.when)))
+            print(tempFormatIn.format(' ', ' ', T_K, Xhumidity, ' ', Xpressure, \
+                                      Xwind, ' ', ' ', ' ', \
+                                      ' ', Xdt))
+        except:
+            for var in dir():
+                myvalue = eval(var)
+                print(var, type(var), myvalue)
+            print ("except:", json.dumps(w, indent=2))
+
+    def Schedule(self, offsetSeconds = None, frequency = None):
+        if offsetSeconds:
+            self.offsetSeconds = offsetSeconds
+        if frequency:
+            self.frequency = frequency
+        now = datetime.datetime.now()
+        firstTime = now.replace(hour = 0, minute = 0, second = self.offsetSeconds, microsecond = 0) -\
+                    datetime.timedelta(days = 7)
+        while firstTime < now:
+            firstTime += datetime.timedelta(seconds = self.frequency)
+        self.starttime = firstTime
+        #print "showStatus Start time:", self.starttime, self.thermostat.name
+        ###self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.logStatus, ())
         
 def main():
 
@@ -767,34 +908,39 @@ def main():
     # Build a scheduler object that will look at absolute times
     scheduler = sched.scheduler(time.time, time.sleep)
 
-    upCirculate = Circulate(up, scheduler)
-    downCirculate = Circulate(down, scheduler)
-    upCirculate.Schedule(startMinute = 0)
-    downCirculate.Schedule(startMinute = 1)
+    if False:
+        upCirculate = Circulate(up, scheduler)
+        downCirculate = Circulate(down, scheduler)
+        upCirculate.Schedule(startMinute = 0)
+        downCirculate.Schedule(startMinute = 1)
 
-    upStatus = showStatus(up, scheduler)
-    downStatus = showStatus(down, scheduler)
-    upStatus.Schedule(offsetSeconds = 2)
-    downStatus.Schedule(offsetSeconds = 4)
+        upStatus = showStatus(up, scheduler)
+        downStatus = showStatus(down, scheduler)
+        upStatus.Schedule(offsetSeconds = 2)
+        downStatus.Schedule(offsetSeconds = 4)
 
-    upHumidity = HumidityControl(up, scheduler)
-    downHumidity = HumidityControl(down, scheduler)
-    upHumidity.Schedule(startHour = 6, startMinute = 30)
-    downHumidity.Schedule(startHour = 6, startMinute = 32)
-    #upHumidity.Schedule(startHour = 11, startMinute = 35)
-    #downHumidity.Schedule(startHour = 11, startMinute = 35)
+        upHumidity = HumidityControl(up, scheduler)
+        downHumidity = HumidityControl(down, scheduler)
+        upHumidity.Schedule(startHour = 6, startMinute = 30)
+        downHumidity.Schedule(startHour = 6, startMinute = 32)
 
-    upLog = logStatus(up, scheduler)
-    downLog = logStatus(down, scheduler)
-    upLog.Schedule(offsetSeconds = 1)
-    downLog.Schedule(offsetSeconds = 3)
+        upLog = logStatus(up, scheduler)
+        downLog = logStatus(down, scheduler)
+        upLog.Schedule(offsetSeconds = 1)
+        downLog.Schedule(offsetSeconds = 3)
 
+    weather = Weather()
+    for i in range(1000):
+        weather.getWeather()
+        time.sleep(900)
+    
     up.showStatusLong()
     #down.showStatusLong()
     #up.showStatusShort()
     #down.showStatusShort()
 
-    scheduler.run()
+    if False:
+        scheduler.run()
         
 if __name__ == '__main__':
   main()
