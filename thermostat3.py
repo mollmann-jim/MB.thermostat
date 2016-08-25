@@ -172,10 +172,16 @@ class Thermo:
             print('{11:10s} {0:^20s} {1:4s} {2:4s} {3:4s} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^7s} {9:6s} {10:^8s}'.\
                 format('Date Time', 'Temp', ' Set', ' Set', 'Until', 'Status', 'Status', 'Status', 'On', 'Status',\
                        'Mode', ' '))
-        print('{11:10s} {0:^20s} {1:4d} {2:4d} {3:4d} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^7s} {9:^6s} {10:^8s}'.\
-            format(str(self.whenStatus), self.getTemp(), self.getCoolSetpoint(), self.getHeatSetpoint(),\
-                   self.getHoldUntil(),  self.getCoolStatus(), self.getHeatStatus(), self.getFanStatus(),\
-                   str(self.fanOn), self.getOutputStatus(), self.getSwitchPosition(), self.name))
+        try:
+            print('{11:10s} {0:^20s} {1:4d} {2:4d} {3:4d} {4:5s} {5:^10s} {6:^10s} {7:^6s} {8:^7s} {9:^6s} {10:^8s}'.\
+                  format(str(self.whenStatus), self.getTemp(), self.getCoolSetpoint(), self.getHeatSetpoint(),\
+                         self.getHoldUntil(),  self.getCoolStatus(), self.getHeatStatus(), self.getFanStatus(),\
+                         str(self.fanOn), self.getOutputStatus(), self.getSwitchPosition(), self.name))
+        except:
+            for var in dir():
+                myvalue = eval(var)
+                print(var, type(var), myvalue)
+
         self.statusLineNum += 1
         
     def staleStatus(self):
@@ -297,9 +303,9 @@ class Thermo:
                         time.sleep(delay)
                         delay += delay
                         self.get_login()
-                        print("old Headers:", headers)
+                        #print("old Headers:", headers)
                         headers['Cookie'] = self.cookie
-                        print("new Headers:", headers)
+                        #print("new Headers:", headers)
                         print("After get_login() retry", attempt)
                         continue
                 #print "returning response"

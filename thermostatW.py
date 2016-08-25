@@ -32,6 +32,7 @@ import sched
 import random
 import sqlite3
 import math
+import traceback
 
 try:
     import therm_auth
@@ -773,6 +774,7 @@ class Weather:
         self.description = None
         self.dewpoint = None
         self.when = None
+        self.weatherValidSeconds = 300
         self.locationID = location
         self.where = 'id=' + str(location) + '&APPID=' + WEATHER_KEY
         self.degCtoK=273.15        # Temperature offset between K and C (deg C)
@@ -824,7 +826,19 @@ class Weather:
         T_d = (c * gamma) / (b - gamma)
         return T_d
 
-    def getWeather(self):
+    def staleWeather(self):
+        if self.when != None:
+            last = (time.mktime(self.when.timetuple()))
+            t = datetime.datetime.now()
+            now = (time.mktime(t.timetuple()))
+            delta = now - last
+            return delta > self.weatherValidSeconds
+        else:
+            return True
+
+    def getWeather(self, now = False):
+        if not now and not self.staleWeather():
+            return
         """ call openweathermap api"""
         try:
             response = urllib.request.urlopen('http://api.openweathermap.org/data/2.5/weather?' + self.where)
@@ -847,7 +861,7 @@ class Weather:
             wind = w.get('wind')
             if wind is not None:
                 self.wind = int(2.23694 * wind.get('speed') + 0.5)
-                self.direction = int(wind.get('deg'))
+                self.direction = int(wind.get('deg', 999))
                 Xwind = wind.get('speed')
             else:
                 print ("wind:", json.dumps(w, indent=2))
@@ -885,6 +899,16 @@ class Weather:
                 myvalue = eval(var)
                 print(var, type(var), myvalue)
             print ("except:", json.dumps(w, indent=2))
+            traceback.print_exc()
+
+    def printWeather(self):
+        self.getWeather()
+        t = datetime.datetime.now().replace(microsecond = 0)
+        #            date     name   temp   humid   dew      press      wind   dir
+        Wformat = '{0:^20s} {1:15s} {2:6d} {3:3d}% {4:3d}  {5:7.2f}"Hg {6:6d} {7:3d} {8:10s} {9:20s} {10:8.0f} {11:20s}'
+        print(Wformat.format(str(t), self.name, self.temp, self.humidity, self.dewpoint, self.pressure, \
+                             self.wind, self.direction, self.weather, self.description, \
+                             self.locationID, str(self.when)))
 
     def Schedule(self, offsetSeconds = None, frequency = None):
         if offsetSeconds:
@@ -931,7 +955,7 @@ def main():
 
     weather = Weather()
     for i in range(1000):
-        weather.getWeather()
+        weather.printWeather()
         time.sleep(900)
     
     up.showStatusLong()
