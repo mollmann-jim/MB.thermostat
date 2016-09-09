@@ -780,6 +780,9 @@ class Weather:
         self.degCtoK=273.15        # Temperature offset between K and C (deg C)
         self.table = 'weather'
         self.sqlite = sqlite3.connect(DBname)
+        drop = "DROP TABLE IF EXISTS " + self.table
+        self.sqlite.execute(drop)
+        self.sqlite.commit()
         create = "CREATE TABLE IF NOT EXISTS " + self.table + "(" +\
                  " id             INTEGER PRIMARY KEY, " +\
                  " timestamp      INTEGER DEFAULT CURRENT_TIMESTAMP, " +\
@@ -789,7 +792,7 @@ class Weather:
                  " humidity       INTEGER, " +\
                  " dewpoint       INTEGER, " +\
                  " wind           INTEGER, " +\
-                 " directiom      INTEGER, " +\
+                 " direction      INTEGER, " +\
                  " locationID     INTEGER, " +\
                  " weather        TEXT,    " +\
                  " description    TEXT,    " +\
@@ -797,6 +800,7 @@ class Weather:
                  " )"
         #print create
         self.sqlite.execute(create)   
+        self.sqlite.commit()
 
     def CtoF(self, T):
         return (T * 1.8) + 32
@@ -882,18 +886,6 @@ class Weather:
             Xdt = w.get('dt')
             if (T_K * self.pressure * self.humidity * self.dewpoint * self.wind * self.direction) == 0:
                 print ("00000:", json.dumps(w, indent=2))
-            t = datetime.datetime.now().replace(microsecond = 0)
-            print(t, self.temp, self.name, '{:5.2f}'.format(self.pressure), self.humidity, self.wind, \
-                  self.direction, self.weather, self.description, self.dewpoint, self.when, self.locationID)
-            #                   date     name   temp   humid  dew    press      wind   dir
-            tempFormatMine = '{0:^20s} {1:15s} {2:6d} {3:3d} {4:3d}  {5:7.2f} {6:6d} {7:3d} {8:10s} {9:20s} {10:8.0f} {11:20s}'
-            tempFormatIn   = '{0:^20s} {1:15s} {2:6.2f} {3:3d} {4:4s} {5:7.2f} {6:6.2f} {7:3s} {8:10s} {9:20s} {10:8s} {11:^20d}'
-            print(tempFormatMine.format(str(t), self.name, self.temp, self.humidity, self.dewpoint, self.pressure, \
-                                        self.wind, self.direction, self.weather, self.description, \
-                                        self.locationID, str(self.when)))
-            print(tempFormatIn.format(' ', ' ', T_K, Xhumidity, ' ', Xpressure, \
-                                      Xwind, ' ', ' ', ' ', \
-                                      ' ', Xdt))
         except:
             for var in dir():
                 myvalue = eval(var)
@@ -904,11 +896,18 @@ class Weather:
     def printWeather(self):
         self.getWeather()
         t = datetime.datetime.now().replace(microsecond = 0)
-        #            date     name   temp   humid   dew      press      wind   dir
-        Wformat = '{0:^20s} {1:15s} {2:6d} {3:3d}% {4:3d}  {5:7.2f}"Hg {6:6d} {7:3d} {8:10s} {9:20s} {10:8.0f} {11:20s}'
-        print(Wformat.format(str(t), self.name, self.temp, self.humidity, self.dewpoint, self.pressure, \
-                             self.wind, self.direction, self.weather, self.description, \
-                             self.locationID, str(self.when)))
+        #            date     name   temp   humid   dew      press      wind      dir
+        Wformat = '{0:^20s} {1:15s} {2:3d} {3:3d}% {4:3d}  {5:5.2f}"Hg {6:3d}mph {7:3d} {8:10s} {9:20s} {10:8.0f} {11:20s}'
+        try:
+            print(Wformat.format(str(t), self.name, self.temp, self.humidity, self.dewpoint, self.pressure, \
+                                 self.wind, self.direction, self.weather, self.description, \
+                                 self.locationID, str(self.when)))
+        except:
+            print("Exception in printWeather:")
+            for var in dir():
+                myvalue = eval(var)
+                print(var, type(var), myvalue)
+            traceback.print_exc()
 
     def Schedule(self, offsetSeconds = None, frequency = None):
         if offsetSeconds:
@@ -923,6 +922,31 @@ class Weather:
         self.starttime = firstTime
         #print "showStatus Start time:", self.starttime, self.thermostat.name
         ###self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.logStatus, ())
+
+    def logWeather(self):
+        self.getWeather()
+        row = 'INSERT INTO ' + self.table + '(obsTime, temp, pressure, humidity, dewpoint, wind, ' +\
+              'direction, locationID, weather, description, name)' +\
+              'VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        #print(row)
+        values = (self.when,        \
+                  self.temp,        \
+                  self.pressure,    \
+                  self.humidity,    \
+                  self.dewpoint,    \
+                  self.wind,        \
+                  self.direction,   \
+                  self.locationID,  \
+                  self.weather,     \
+                  self.description, \
+                  self.name         \
+                  )
+        #print(values)
+        self.sqlite.execute(row, values)
+        self.sqlite.commit()
+        #self.starttime = self.starttime + datetime.timedelta(seconds = self.frequency)
+        #self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.logStatus, ())
+
         
 def main():
 
@@ -956,6 +980,7 @@ def main():
     weather = Weather()
     for i in range(1000):
         weather.printWeather()
+        weather.logWeather()
         time.sleep(900)
     
     up.showStatusLong()
