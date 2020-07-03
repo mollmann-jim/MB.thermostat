@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S python3 -u
 
 # Jim Mollmann
 # original:
@@ -270,13 +270,14 @@ class Thermo:
         return s
 
     def myHTTPrequest(self, host, method, url, body, headers, reauthorize = False):
-        retries = 5
+        retries = 16
         delay = 8
         for attempt in range(retries):
             #print attempt, ':', method, url
             try:
                 conn = http.client.HTTPSConnection(host)
                 conn.request(method, url, body, headers)
+                response = conn.getresponse()
             except (http.client.HTTPException, socket.error, ConnectionResetError) as detail:
                 print(attempt, ':', method, url)
                 print(("myHTTPrequest socket.error:{0}".format(detail)))
@@ -284,10 +285,10 @@ class Thermo:
                 time.sleep(delay)
                 delay += delay
                 if (attempt == (retries-1)):
-                    print("fifth try failed too")
+                    print("tenth try failed too")
                     raise
             else:
-                response = conn.getresponse()
+                #response = conn.getresponse()
                 status = response.status
                 #print "status:", status
                 if (status == 200):
@@ -299,7 +300,7 @@ class Thermo:
                           format(response.status,response.reason, method, url)))
                     print(attempt, ':', method, url)
                     if ((status == 401) or (status == 500)) and (reauthorize):
-                        print("Retrying get_login() try:", attempt)
+                        print("Retrying get_login() try:", attempt, datetime.datetime.now())
                         time.sleep(delay)
                         delay += delay
                         self.get_login()
@@ -561,10 +562,10 @@ class Circulate:
         self.endtime = firstEnd
         #print "Fan Start time:", self.starttime, self.thermostat.name
         #print "Fan   End time:", self.endtime, self.thermostat.name
-        self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.FanStart, [True])
-        self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.FanStart, [False])
+        self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.FanStart, [True, True])
+        self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.FanStart, [False, True])
 
-    def FanStart(self, on):
+    def FanStart(self, on, firstStop):
         self.thermostat.getStatusRetry()
         if on:
             if self.thermostat.scheduleOn():
@@ -573,7 +574,7 @@ class Circulate:
                 self.thermostat.setThermostat(fan = True)
             self.starttime = self.starttime + datetime.timedelta(seconds = self.frequency)
             #print "Next fan on", self.starttime
-            self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.FanStart, [True])
+            self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.FanStart, [True, True])
         else:
             if self.thermostat.scheduleOn():
                 saved = self.thermostat.getSavedStatus()
@@ -581,9 +582,12 @@ class Circulate:
                 # if the fan is already off, let it be
                 if self.thermostat.fanStatus != 0:
                     self.thermostat.setThermostat(fan = saved['fanStatus'])
-            self.endtime = self.endtime + datetime.timedelta(seconds = self.frequency)
-            #print "Next fan off", self.starttime
-            self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.FanStart, [False])
+            if firstStop:
+                self.endtime = self.endtime + datetime.timedelta(seconds = self.frequency)
+                #print "Next fan off", self.starttime
+                self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.FanStart, [False, True])
+                endtime = self.endtime + datetime.timedelta(seconds = self.frequency)
+                self.scheduler.enterabs(time.mktime(endtime.timetuple()), 1, self.FanStart, [False, False])
 
 class HumidityControl:
 
@@ -591,6 +595,7 @@ class HumidityControl:
         self.thermostat = thermostat
         self.scheduler = scheduler
         self.runtime = 30*60
+        #self.runtime = 10*60
         self.frequency = 24*60*60
         self.startHour = 6
         self.startMinute = 30
@@ -632,7 +637,7 @@ class HumidityControl:
         self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.runSystem, [True])
         self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.runSystem, [False])
 
-    def runSystem(self, on):
+    def runSystemOld(self, on):
         self.thermostat.getStatusRetry()
         temperature = self.thermostat.getTemp()
         if temperature > self.coolLimit:
@@ -658,6 +663,47 @@ class HumidityControl:
         else:
             if not self.thermostat.scheduleOn():
                 saved = self.thermostat.getSavedStatus()
+                if self.myCool == self.thermostat.getCoolSetpoint():
+                    cool = saved['coolSetPoint']
+                else:
+                    cool = self.thermostat.getCoolSetpoint()
+                if self.myHeat == self.thermostat.getHeatSetpoint():
+                    heat = saved['heatSetPoint']
+                else:
+                    heat = self.thermostat.getHeatSetpoint()
+                self.thermostat.setThermostat(cool = cool, heat = heat)
+            self.endtime = self.endtime + datetime.timedelta(seconds = self.frequency)
+            #print "Next fan off", self.starttime
+            self.scheduler.enterabs(time.mktime(self.endtime.timetuple()), 1, self.runSystem, [False])
+            
+    def runSystem(self, on):
+        self.thermostat.getStatusRetry()
+        #when to cool, when to heat???
+        if on:
+            temperature = self.thermostat.getTemp()
+            if temperature > self.coolLimit:
+                cool = self.coolSet
+                heat = cool - 10
+            elif temperature < self.heatLimit:
+                heat = self.heatSet
+                cool = heat + 10
+            else:
+                cool = None
+                heat = None
+            self.myCool = cool
+            self.myHeat = heat            
+            #print "Humidity Control On", datetime.datetime.now(), self.thermostat.name, "cool:", cool, "Heat:", heat
+            self.thermostat.saveStatus()
+            if not self.thermostat.scheduleOn():
+                self.thermostat.setThermostat(cool = cool, heat = heat)
+            self.starttime = self.starttime + datetime.timedelta(seconds = self.frequency)
+            #print "Next fan on", self.starttime
+            self.scheduler.enterabs(time.mktime(self.starttime.timetuple()), 1, self.runSystem, [True])
+        else:
+            if not self.thermostat.scheduleOn():
+                saved = self.thermostat.getSavedStatus()
+                print("myCool:", self.myCool, "myHeat:", self.myHeat, "Setpoint:", self.thermostat.getCoolSetpoint(), \
+                      self.thermostat.getHeatSetpoint(), "Saved:", saved['coolSetPoint'], saved['heatSetPoint'])
                 if self.myCool == self.thermostat.getCoolSetpoint():
                     cool = saved['coolSetPoint']
                 else:

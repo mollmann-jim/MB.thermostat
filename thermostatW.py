@@ -849,7 +849,12 @@ class Weather:
             openWeather = response.read().decode('utf-8')
             w = json.loads(openWeather)
             #print (json.dumps(w, indent=2))
-            T_K = self.pressure = self.humidity = self.dewpoint = self.wind = self.direction = self.when = 0
+            #T_K = self.pressure = self.humidity = self.dewpoint = self.wind = self.direction = self.when = 0
+            code = w.get('cod')
+            if code != 200:
+                print ("cod:", json.dumps(w, indent=2))
+                if code == 404:
+                    return
             self.name = w.get('name')
             main = w.get('main')
             if main is not None:
@@ -876,6 +881,8 @@ class Weather:
                 self.description = w0.get('description')
                 if len(weather) > 1:
                     print("weather len > 1:", weather)
+                    for wd in weather:
+                        print("weather:", wd.get('main'), 'description:', wd.get('description'))
             else:
                 print (json.dumps(w, indent=2))
             when = w.get('dt')
