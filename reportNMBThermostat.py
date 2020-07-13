@@ -88,6 +88,7 @@ def main():
     start, end = getTimeInterval.getPeriod('Prev7days')
     print(start,end)
 
+    
     #makeReport(c, 'RDU')
     #makeReport(c, 'MYR')
 
