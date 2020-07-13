@@ -85,9 +85,15 @@ def main():
     db.row_factory = sqlite3.Row
     c = db.cursor()
     #db.set_trace_callback(print)
-    start, end = getTimeInterval.getPeriod('Prev7days')
-    print(start,end)
 
+    for int in ['Today', 'Yesterday', 'Prev7days', 'This Week', 'Last Week', 'This Month', \
+                'Last Month']:
+        start, end = getTimeInterval.getPeriod(int)
+        print(start, '\t', end, '\t', int)
+    for yr in ['2017', '2018', '2019', '2020']:
+        start, end = getTimeInterval.getPeriod('Year', year = yr)
+        print(start, '\t', end, '\t Year ', yr)
+        
     
     #makeReport(c, 'RDU')
     #makeReport(c, 'MYR')
