@@ -111,6 +111,8 @@ def main():
     start, end = getTimeInterval.getPeriod('Yesterday')
     start = dt.datetime(2019, 8, 3)
     end   = dt.datetime(2019, 8, 4) - dt.timedelta(microseconds = 1)
+    start = dt.datetime(2020, 2, 2)
+    end   = dt.datetime(2020, 2, 3) - dt.timedelta(microseconds = 1)
     print(start,end)
     c.execute(select, (start, end))
     result = c.fetchall()
@@ -124,27 +126,28 @@ def main():
     c.execute(select, (start, end))
     result = c.fetchall()
     fanTime = heatTime = coolTime = 0
-    fanLast = heatLast = coolLast = start
+    last = start
     for r in result:
         statTime = dt.datetime.strptime((r['statusTime']), '%Y-%m-%d %H:%M:%S')
         #print(statTime, r['fanOn'], r['outputStatus'])
         if r['outputStatus'] == 'cool on':
-            coolTime += (statTime - coolLast).total_seconds()
-            print('Cooling', coolTime, coolLast, statTime, (statTime - coolLast).total_seconds())
+            coolTime += (statTime - last).total_seconds()
+            #print('Cooling', coolTime, last, statTime, (statTime - last).total_seconds())
         elif r['outputStatus'] == 'heat on':
-            heatTime += (statTime - heatLast).total_seconds()
-            print('Heating', heatTime, heatLast, statTime, (statTime - heatLast).total_seconds())
+            heatTime += (statTime - last).total_seconds()
+            #print('Heating', heatTime, last, statTime, (statTime - last).total_seconds())
         elif r['fanOn'] == 1:
-            fanTime += (statTime - heatLast).total_seconds()
-            print('Fan Only', fanTime, fanLast, statTime, (statTime - fanLast).total_seconds())
+            fanTime += (statTime - last).total_seconds()
+            #print('Fan Only', fanTime, last, statTime, (statTime - last).total_seconds())
         elif r['fanOn'] == 0 and  r['outputStatus'] == 'off':
             # no fan/heat/cool - just idle
             pass
         else:
             print('Unexpected: outputStatus:', r['outputStatus'], '\tfanOn:',  r['fanOn'])
-        fanLast = heatLast = coolLast = statTime
+        last = statTime
+    elapsed = (end - start).total_seconds()
         
-    print('Cooling:', coolTime, '\tHeating:', heatTime, '\tFan Only', fanTime)
+    print('Cooling:', coolTime, '\tHeating:', heatTime, '\tFan Only', fanTime, '\tElapsed:', elapsed)
 
         
     #makeReport(c, 'RDU')
