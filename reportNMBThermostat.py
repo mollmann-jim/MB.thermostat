@@ -8,78 +8,118 @@ from shared import getTimeInterval
 
 DBname = '/home/jim/tools/Honeywell/MBthermostat3.sql'
 
-def fmtLine(tag, row):
+def fmtTempsLine(tag, row):
     line = tag + ': (none)'
     if row['minT']:
         period =  '{:>10s}'.format(tag)
         minT   = ' {:>5d}'.format(row['minT'])
         maxT   = ' {:>5d}'.format(row['maxT'])
         avgT   = ' {:>5.1f}'.format(row['avgT'])
-        minC   = ' {:>-7d}'.format(row['minC'])
-        maxC   = ' {:>7d}'.format(row['maxC'])
-        avgC   = ' {:>7.1f}'.format(row['avgC'])
-        minH   = ' {:>7d}'.format(row['minH'])
-        maxH   = ' {:>7d}'.format(row['maxH'])
-        avgH   = ' {:>7.1f}'.format(row['avgH'])
+        minC   = ' {:>-5d}'.format(row['minC'])
+        maxC   = ' {:>5d}'.format(row['maxC'])
+        avgC   = ' {:>5.1f}'.format(row['avgC'])
+        minH   = ' {:>5d}'.format(row['minH'])
+        maxH   = ' {:>5d}'.format(row['maxH'])
+        avgH   = ' {:>5.1f}'.format(row['avgH'])
         line = period + minT + maxT + avgT + minC + maxC + avgC + minH + maxH + avgH
     return line
-                                
+
+def fmtRunTmLine(x):
+    
+    line = 'Invalid "elapsed":' + str(x['elapsed'])
+    if x['elapsed'] > 0:
+        heatPct = '{:>6.1f}'.format(100.0 * x['heat']  / x['elapsed'])
+        coolPct = '{:>6.1f}'.format(100.0 * x['cool']  / x['elapsed'])
+        fanPct  = '{:>6.1f}'.format(100.0 * x['fanOn'] / x['elapsed'])
+        line = heatPct + coolPct + fanPct
+    return line
 
 def printHeader():
     # period min/max/avg(temp) min/max/avg(dew) avg(wind) sum(precip)
     #      2020/07/02 mmmmm MMMMM aaaaa mmmmm MMMMM aaaaa wwwww rrrrr
     print('')
-    print('             Min   Max   Avg     Min     Max    Avg      Min     Max     Avg ')
-    print('            Temp  Temp  Temp CoolSet CoolSet CoolSet HeatSet HeatSet HeatSet')
-def makeSection(c, site, title, byDay = False, year = None):
-    start, end = getPeriod(title, year = year)
-    selectFields = 'SELECT date(timestamp) as date, ' +\
-        'MIN(temperature) AS minT, MAX(temperature) AS maxT, AVG(temperature) AS avgT, ' +\
-        'MIN(dewpoint) AS minD, MAX(dewpoint) AS maxD, AVG(dewpoint) AS avgD, ' +\
-        'AVG(wind) AS avgW, TOTAL(precipitation1hr) AS rain ' +\
-        'FROM ' + site + ' WHERE timestamp >= ? AND timestamp <= ?'
+    print('                               Min   Max   Avg   Min   Max   Avg  Heat  Cool   Fan')
+    print('             Min   Max   Avg  Cool  Cool  Cool  Heat  Heat  Heat   Run   Run   Run')
+    print('            Temp  Temp  Temp   Set   Set   Set   Set   Set   Set     %     %     %')
+    
+def runTimes(c, table, start, end):
+    select = 'SELECT statusTime, fanOn, outputStatus FROM ' + table +\
+        ' WHERE statusTime >= ? AND statusTime <= ? ;'
+    c.execute(select, (start, end))
+    result = c.fetchall()
+    fanTime = heatTime = coolTime = 0
+    last = start
+    for r in result:
+        statTime = dt.datetime.strptime((r['statusTime']), '%Y-%m-%d %H:%M:%S')
+        if r['outputStatus'] == 'cool on':
+            coolTime += (statTime - last).total_seconds()
+        elif r['outputStatus'] == 'heat on':
+            heatTime += (statTime - last).total_seconds()
+        elif r['fanOn'] == 1:
+            fanTime += (statTime - last).total_seconds()
+        elif r['fanOn'] == 0 and  r['outputStatus'] == 'off':
+            # no fan/heat/cool - just idle
+            pass
+        elif r['fanOn'] is None and  r['outputStatus'] == 'off':
+            # no fan/heat/cool - just idle
+            pass
+        else:
+            print('Unexpected: outputStatus:', r['outputStatus'], '\tfanOn:',  r['fanOn'])
+        last = statTime
+    elapsed = (end - start).total_seconds()
+        
+    #print('Cooling:', coolTime, '\tHeating:', heatTime, '\tFan Only', fanTime, '\tElapsed:', elapsed)
+    return {'elapsed' : elapsed, 'heat' : heatTime, 'cool' : coolTime, 'fanOn': fanTime}
+
+def makeSection(c, thermostat, title, byDay = False, year = None):
+    start, end = getTimeInterval.getPeriod(title, year = year)
+    selectFields =  'SELECT ' \
+        'max(temp)         AS maxT, '\
+        'min(temp)         AS minT, '\
+        'avg(temp)         AS avgT, '\
+        'max(coolSetPoint) AS maxC, '\
+        'min(coolSetPoint) AS minC, '\
+        'avg(coolSetPoint) AS avgC, '\
+        'max(heatSetPoint) AS maxH, '\
+        'min(heatSetPoint) AS minH, '\
+        'avg(heatSetPoint) AS avgH  '\
+        ' FROM ' + thermostat +\
+        ' WHERE statusTime >= ? AND statusTime <= ? '
     select = selectFields + ' ;'
     # sqlite date(timestamp) returns the UTC date
-    #selectByDay = selectFields + ' GROUP BY date(timestamp) ORDER BY date(timestamp) DESC;'
-    selectByDay = selectFields + ' GROUP BY substr(timestamp,1,10) ORDER BY timestamp DESC;'
-    #print(title, start, end)
+    selectByDay = selectFields + ' GROUP BY substr(statusTime,1,10) ORDER BY statusTime DESC;'
     if byDay:
         c.execute(selectByDay, (start, end))
     else:
         c.execute(select, (start, end))
     result = c.fetchall()
-    #printHeader()
     if year: title += ' ' + year
     for record in result:
         if byDay:
-            print(fmtLine(record['date'], record))
+            lineTemps = fmtTempsLine((record['date'], record))
         else:
-            print(fmtLine(title, record))
-
-def makeReport(c, site):
-    print('---------------------------', site, '----------------------------')
-    printHeader()
-    makeSection(c, site, 'Today')
-    makeSection(c, site, 'Prev7days', byDay = True)
-
-    printHeader()
-    for period in ['This Week', 'Last Week', 'This Month', 'Last Month']:
-        makeSection(c, site,  period)
+            lineTemps = fmtTempsLine(title, record)
+        lineRunTm = fmtRunTmLine(runTimes(c, thermostat, start, end))
+        print(lineTemps + lineRunTm)
         
+def makeReport(c, thermostat):
+    print('---------------------------', thermostat, '----------------------------')
     printHeader()
-    select_min_yr = 'SELECT min(timestamp) AS min FROM ' + site + ';'
+    makeSection(c, thermostat, 'Today')
+    
+    printHeader()
+    select_min_yr = 'SELECT min(statusTime) AS min FROM ' + thermostat + ';'
     c.execute(select_min_yr)
     min = c.fetchone()
-    first = dt.datetime.strptime(min['min'], '%Y-%m-%d %H:%M:%S%z')
-    select_max_yr = 'SELECT max(timestamp) AS max FROM ' + site + ';'
+    first = dt.datetime.strptime(min['min'], '%Y-%m-%d %H:%M:%S')
+    select_max_yr = 'SELECT max(statusTime) AS max FROM ' + thermostat + ';'
     c.execute(select_max_yr)
     max = c.fetchone()
-    last = dt.datetime.strptime(max['max'], '%Y-%m-%d %H:%M:%S%z')
+    last = dt.datetime.strptime(max['max'], '%Y-%m-%d %H:%M:%S')
     for year in range(last.year, first.year - 1, -1):
-        makeSection(c, site, 'Year', year = '{:4d}'.format(year))
+        makeSection(c, thermostat, 'Year', year = '{:4d}'.format(year))
     print('')
-
-
+    
 def main():
     db = sqlite3.connect(DBname)
     db.row_factory = sqlite3.Row
@@ -94,61 +134,9 @@ def main():
         start, end = getTimeInterval.getPeriod('Year', year = yr)
         #print(start, '\t', end, '\t Year ', yr)
 
-    table = 'Upstairs'
-    select = 'SELECT ' \
-        'max(temp)         AS maxT, '\
-        'min(temp)         AS minT, '\
-        'avg(temp)         AS avgT, '\
-        'max(coolSetPoint) AS maxC, '\
-        'min(coolSetPoint) AS minC, '\
-        'avg(coolSetPoint) AS avgC, '\
-        'max(heatSetPoint) AS maxH, '\
-        'min(heatSetPoint) AS minH, '\
-        'avg(heatSetPoint) AS avgH  '\
-        ' FROM ' + table +\
-        ' WHERE statusTime >= ? AND statusTime <= ? ;'
-    print(select)
-    start, end = getTimeInterval.getPeriod('Yesterday')
-    start = dt.datetime(2019, 8, 3)
-    end   = dt.datetime(2019, 8, 4) - dt.timedelta(microseconds = 1)
-    start = dt.datetime(2020, 2, 2)
-    end   = dt.datetime(2020, 2, 3) - dt.timedelta(microseconds = 1)
-    print(start,end)
-    c.execute(select, (start, end))
-    result = c.fetchall()
-    printHeader()
-    for record in result:
-        line = fmtLine('Yesterday', record)
-        print(line)
-
-    select = 'SELECT statusTime, fanOn, outputStatus FROM ' + table +\
-        ' WHERE statusTime >= ? AND statusTime <= ? ;'
-    c.execute(select, (start, end))
-    result = c.fetchall()
-    fanTime = heatTime = coolTime = 0
-    last = start
-    for r in result:
-        statTime = dt.datetime.strptime((r['statusTime']), '%Y-%m-%d %H:%M:%S')
-        #print(statTime, r['fanOn'], r['outputStatus'])
-        if r['outputStatus'] == 'cool on':
-            coolTime += (statTime - last).total_seconds()
-            #print('Cooling', coolTime, last, statTime, (statTime - last).total_seconds())
-        elif r['outputStatus'] == 'heat on':
-            heatTime += (statTime - last).total_seconds()
-            #print('Heating', heatTime, last, statTime, (statTime - last).total_seconds())
-        elif r['fanOn'] == 1:
-            fanTime += (statTime - last).total_seconds()
-            #print('Fan Only', fanTime, last, statTime, (statTime - last).total_seconds())
-        elif r['fanOn'] == 0 and  r['outputStatus'] == 'off':
-            # no fan/heat/cool - just idle
-            pass
-        else:
-            print('Unexpected: outputStatus:', r['outputStatus'], '\tfanOn:',  r['fanOn'])
-        last = statTime
-    elapsed = (end - start).total_seconds()
-        
-    print('Cooling:', coolTime, '\tHeating:', heatTime, '\tFan Only', fanTime, '\tElapsed:', elapsed)
-
+    for thermostat in ['Upstairs', 'Downstairs']:
+        makeReport(c, thermostat)
+    
         
     #makeReport(c, 'RDU')
     #makeReport(c, 'MYR')
