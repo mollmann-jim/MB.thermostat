@@ -137,6 +137,9 @@ def main():
         elif r['fanOn'] == 1:
             fanTime += (statTime - heatLast).total_seconds()
             print('Fan Only', fanTime, fanLast, statTime, (statTime - fanLast).total_seconds())
+        elif r['fanOn'] == 0 and  r['outputStatus'] == 'off':
+            # no fan/heat/cool - just idle
+            pass
         else:
             print('Unexpected: outputStatus:', r['outputStatus'], '\tfanOn:',  r['fanOn'])
         fanLast = heatLast = coolLast = statTime
