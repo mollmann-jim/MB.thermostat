@@ -48,27 +48,34 @@ def runTimes(c, table, start, end):
     c.execute(select, (start, end))
     result = c.fetchall()
     fanTime = heatTime = coolTime = 0
-    last = start
+    previous = start
+    first = last = None
     for r in result:
         statTime = dt.datetime.strptime((r['statusTime']), '%Y-%m-%d %H:%M:%S')
+        # may not have data for the entire time range
+        # start, end if they are within 10 minutes. Otherwise first and last times.
+        if first is None:
+            if (statTime - start).total_seconds() < 600:
+                first = start
+            else:
+                first = statTime
         if r['outputStatus'] == 'cool on':
-            coolTime += (statTime - last).total_seconds()
+            coolTime += (statTime - previous).total_seconds()
         elif r['outputStatus'] == 'heat on':
-            heatTime += (statTime - last).total_seconds()
+            heatTime += (statTime - previous).total_seconds()
         elif r['fanOn'] == 1:
-            fanTime += (statTime - last).total_seconds()
-        elif r['fanOn'] == 0 and  r['outputStatus'] == 'off':
-            # no fan/heat/cool - just idle
-            pass
-        elif r['fanOn'] is None and  r['outputStatus'] == 'off':
+            fanTime += (statTime - previous).total_seconds()
+        elif r['outputStatus'] == 'off' and (r['fanOn'] == 0 or r['fanOn'] is None):
             # no fan/heat/cool - just idle
             pass
         else:
             print('Unexpected: outputStatus:', r['outputStatus'], '\tfanOn:',  r['fanOn'])
-        last = statTime
-    elapsed = (end - start).total_seconds()
-        
-    #print('Cooling:', coolTime, '\tHeating:', heatTime, '\tFan Only', fanTime, '\tElapsed:', elapsed)
+        previous = statTime
+    if (end - previous).total_seconds() < 600:
+        last = end
+    else:
+        last = previous
+    elapsed = (last - first).total_seconds()
     return {'elapsed' : elapsed, 'heat' : heatTime, 'cool' : coolTime, 'fanOn': fanTime}
 
 def getYears(c, thermostat):
@@ -131,6 +138,7 @@ def makeReport(c, thermostat):
     for year in range(last.year, first.year - 1, -1):
         makeSection(c, thermostat, 'Year', year = year)
     print('')
+    makeSection(c, thermostat,  'All')
     
 def main():
     db = sqlite3.connect(DBname)
