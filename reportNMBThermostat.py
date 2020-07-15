@@ -71,9 +71,21 @@ def runTimes(c, table, start, end):
     #print('Cooling:', coolTime, '\tHeating:', heatTime, '\tFan Only', fanTime, '\tElapsed:', elapsed)
     return {'elapsed' : elapsed, 'heat' : heatTime, 'cool' : coolTime, 'fanOn': fanTime}
 
+def getYears(c, thermostat):
+    select_min_yr = 'SELECT min(statusTime) AS min FROM ' + thermostat + ';'
+    c.execute(select_min_yr)
+    min = c.fetchone()
+    first = dt.datetime.strptime(min['min'], '%Y-%m-%d %H:%M:%S')
+    select_max_yr = 'SELECT max(statusTime) AS max FROM ' + thermostat + ';'
+    c.execute(select_max_yr)
+    max = c.fetchone()
+    last = dt.datetime.strptime(max['max'], '%Y-%m-%d %H:%M:%S')
+    return first, last
+
 def makeSection(c, thermostat, title, byDay = False, year = None):
-    start, end = getTimeInterval.getPeriod(title, year = year)
+    start, end, name = getTimeInterval.getPeriod(title, year = year)
     selectFields =  'SELECT ' \
+        'date(statusTime)  AS date, '\
         'max(temp)         AS maxT, '\
         'min(temp)         AS minT, '\
         'avg(temp)         AS avgT, '\
@@ -93,31 +105,31 @@ def makeSection(c, thermostat, title, byDay = False, year = None):
     else:
         c.execute(select, (start, end))
     result = c.fetchall()
-    if year: title += ' ' + year
+    #if year: title += ' ' + year
     for record in result:
         if byDay:
-            lineTemps = fmtTempsLine((record['date'], record))
+            lineTemps = fmtTempsLine(record['date'], record)
         else:
-            lineTemps = fmtTempsLine(title, record)
+            lineTemps = fmtTempsLine(name, record)
         lineRunTm = fmtRunTmLine(runTimes(c, thermostat, start, end))
         print(lineTemps + lineRunTm)
         
 def makeReport(c, thermostat):
+    first, last = getYears(c, thermostat)
     print('---------------------------', thermostat, '----------------------------')
     printHeader()
     makeSection(c, thermostat, 'Today')
-    
+    makeSection(c, thermostat, 'Prev7days', byDay = True)
     printHeader()
-    select_min_yr = 'SELECT min(statusTime) AS min FROM ' + thermostat + ';'
-    c.execute(select_min_yr)
-    min = c.fetchone()
-    first = dt.datetime.strptime(min['min'], '%Y-%m-%d %H:%M:%S')
-    select_max_yr = 'SELECT max(statusTime) AS max FROM ' + thermostat + ';'
-    c.execute(select_max_yr)
-    max = c.fetchone()
-    last = dt.datetime.strptime(max['max'], '%Y-%m-%d %H:%M:%S')
+    for period in ['This Week', 'Last Week', 'This Month', 'Last Month']:
+        makeSection(c, thermostat,  period)
+    for period in ['This Month', 'Last Month']:
+        printHeader()
+        for year in range(last.year, first.year - 1, -1):
+            makeSection(c, thermostat, period, year = year)
+    printHeader()
     for year in range(last.year, first.year - 1, -1):
-        makeSection(c, thermostat, 'Year', year = '{:4d}'.format(year))
+        makeSection(c, thermostat, 'Year', year = year)
     print('')
     
 def main():
@@ -128,11 +140,12 @@ def main():
 
     for int in ['Today', 'Yesterday', 'Prev7days', 'This Week', 'Last Week', 'This Month', \
                 'Last Month']:
-        start, end = getTimeInterval.getPeriod(int)
-        #print(start, '\t', end, '\t', int)
-    for yr in ['2017', '2018', '2019', '2020']:
-        start, end = getTimeInterval.getPeriod('Year', year = yr)
+        start, end, name = getTimeInterval.getPeriod(int)
+        print(start, '\t', end, '\t', int, name)
+    for yr in [2017, 2018, 2019, 2020]:
+        start, end, name = getTimeInterval.getPeriod('Year', year = yr)
         #print(start, '\t', end, '\t Year ', yr)
+        print(start, '\t', end, '\t', int, name)
 
     for thermostat in ['Upstairs', 'Downstairs']:
         makeReport(c, thermostat)
