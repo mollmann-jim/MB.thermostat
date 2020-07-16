@@ -75,6 +75,7 @@ def runTimes(c, table, start, end):
         last = end
     else:
         last = previous
+    #print(start, end, first, last, (last - first).total_seconds())
     elapsed = (last - first).total_seconds()
     return {'elapsed' : elapsed, 'heat' : heatTime, 'cool' : coolTime, 'fanOn': fanTime}
 
@@ -116,9 +117,14 @@ def makeSection(c, thermostat, title, byDay = False, year = None):
     for record in result:
         if byDay:
             lineTemps = fmtTempsLine(record['date'], record)
+            BOD = dt.datetime.combine(dt.datetime.strptime(record['date'], '%Y-%m-%d').date(), \
+                                      dt.time.min)
+            EOD = dt.datetime.combine(dt.datetime.strptime(record['date'], '%Y-%m-%d').date(), \
+                                      dt.time.max)
+            lineRunTm = fmtRunTmLine(runTimes(c, thermostat, BOD, EOD))
         else:
             lineTemps = fmtTempsLine(name, record)
-        lineRunTm = fmtRunTmLine(runTimes(c, thermostat, start, end))
+            lineRunTm = fmtRunTmLine(runTimes(c, thermostat, start, end))
         print(lineTemps + lineRunTm)
         
 def makeReport(c, thermostat):
@@ -149,11 +155,11 @@ def main():
     for int in ['Today', 'Yesterday', 'Prev7days', 'This Week', 'Last Week', 'This Month', \
                 'Last Month']:
         start, end, name = getTimeInterval.getPeriod(int)
-        print(start, '\t', end, '\t', int, name)
+        #print(start, '\t', end, '\t', int, name)
     for yr in [2017, 2018, 2019, 2020]:
         start, end, name = getTimeInterval.getPeriod('Year', year = yr)
         #print(start, '\t', end, '\t Year ', yr)
-        print(start, '\t', end, '\t', int, name)
+        #print(start, '\t', end, '\t', int, name)
 
     for thermostat in ['Upstairs', 'Downstairs']:
         makeReport(c, thermostat)
