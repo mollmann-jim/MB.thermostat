@@ -48,7 +48,6 @@ def runTimes(c, table, start, end):
     c.execute(select, (start, end))
     result = c.fetchall()
     fanTime = heatTime = coolTime = 0
-    previous = start
     first = last = None
     for r in result:
         statTime = dt.datetime.strptime((r['statusTime']), '%Y-%m-%d %H:%M:%S')
@@ -57,14 +56,19 @@ def runTimes(c, table, start, end):
         if first is None:
             if (statTime - start).total_seconds() < 600:
                 first = start
+                previous = start
             else:
                 first = statTime
+                previous = statTime + dt.timedelta(minutes =5)
+        delta = (statTime - previous).total_seconds()
+        # account for missing data by assuming 5 minutes
+        if delta > 900: delta = 300
         if r['outputStatus'] == 'cool on':
-            coolTime += (statTime - previous).total_seconds()
+            coolTime += delta
         elif r['outputStatus'] == 'heat on':
-            heatTime += (statTime - previous).total_seconds()
+            heatTime += delta
         elif r['fanOn'] == 1:
-            fanTime += (statTime - previous).total_seconds()
+            fanTime += delta
         elif r['outputStatus'] == 'off' and (r['fanOn'] == 0 or r['fanOn'] is None):
             # no fan/heat/cool - just idle
             pass
@@ -131,6 +135,10 @@ def makeReport(c, thermostat):
     first, last = getYears(c, thermostat)
     print('---------------------------', thermostat, '----------------------------')
     printHeader()
+    #makeSection(c, thermostat, '2016-08-07')
+    #makeSection(c, thermostat, '2017-01-10')
+    #makeSection(c, thermostat, '2019-08-22')
+    #return
     makeSection(c, thermostat, 'Today')
     makeSection(c, thermostat, 'Prev7days', byDay = True)
     printHeader()
@@ -145,6 +153,9 @@ def makeReport(c, thermostat):
         makeSection(c, thermostat, 'Year', year = year)
     print('')
     makeSection(c, thermostat,  'All')
+
+    #printHeader()
+    #makeSection(c, thermostat,  'All', byDay = True)
     
 def main():
     db = sqlite3.connect(DBname)
