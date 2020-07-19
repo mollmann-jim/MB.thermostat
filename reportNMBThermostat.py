@@ -7,6 +7,9 @@ path.append('/home/jim/tools/')
 from shared import getTimeInterval
 
 DBname = '/home/jim/tools/Honeywell/MBthermostat3.sql'
+saneUsageMax = 10.0
+global insaneUsage
+insaneUsage = ''
 
 def fmtTempsLine(tag, row):
     line = tag + ': (none)'
@@ -35,13 +38,22 @@ def fmtRunTmLine(x):
     return line
 
 def printHeader():
-    # period min/max/avg(temp) min/max/avg(dew) avg(wind) sum(precip)
-    #      2020/07/02 mmmmm MMMMM aaaaa mmmmm MMMMM aaaaa wwwww rrrrr
+    #      2020/07/02 ttttt TTTTT aaaaa ccccc CCCCC aaaaa hhhhh HHHHH aaaaahhhhhhccccccffffff
     print('')
     print('                               Min   Max   Avg   Min   Max   Avg  Heat  Cool   Fan')
     print('             Min   Max   Avg  Cool  Cool  Cool  Heat  Heat  Heat   Run   Run   Run')
     print('            Temp  Temp  Temp   Set   Set   Set   Set   Set   Set     %     %     %')
-    
+
+def checkSanity(runStats, date, where):
+    global insaneUsage
+    for which in ['heat', 'cool', 'fanOn']:
+        runPct = 100.0 * runStats[which] / runStats['elapsed']
+        if runPct > saneUsageMax:
+            fmt = '\n{:>10s} - {:>10s} {:>4s} utilization of {:>5.1f}% exceeds the {:>5.1f}%' \
+                ' limit. Runtime = {:>8s}'
+            runTime = str(dt.timedelta(seconds = runStats[which]))
+            insaneUsage += fmt.format(date, where, which, runPct, saneUsageMax, runTime)
+                                               
 def runTimes(c, table, start, end):
     select = 'SELECT statusTime, fanOn, outputStatus FROM ' + table +\
         ' WHERE statusTime >= ? AND statusTime <= ? ;'
@@ -117,7 +129,6 @@ def makeSection(c, thermostat, title, byDay = False, year = None):
     else:
         c.execute(select, (start, end))
     result = c.fetchall()
-    #if year: title += ' ' + year
     for record in result:
         if byDay:
             lineTemps = fmtTempsLine(record['date'], record)
@@ -125,7 +136,9 @@ def makeSection(c, thermostat, title, byDay = False, year = None):
                                       dt.time.min)
             EOD = dt.datetime.combine(dt.datetime.strptime(record['date'], '%Y-%m-%d').date(), \
                                       dt.time.max)
-            lineRunTm = fmtRunTmLine(runTimes(c, thermostat, BOD, EOD))
+            dailyRunStats = runTimes(c, thermostat, BOD, EOD)
+            checkSanity(dailyRunStats, record['date'], thermostat)
+            lineRunTm = fmtRunTmLine(dailyRunStats)
         else:
             lineTemps = fmtTempsLine(name, record)
             lineRunTm = fmtRunTmLine(runTimes(c, thermostat, start, end))
@@ -163,21 +176,10 @@ def main():
     c = db.cursor()
     #db.set_trace_callback(print)
 
-    for int in ['Today', 'Yesterday', 'Prev7days', 'This Week', 'Last Week', 'This Month', \
-                'Last Month']:
-        start, end, name = getTimeInterval.getPeriod(int)
-        #print(start, '\t', end, '\t', int, name)
-    for yr in [2017, 2018, 2019, 2020]:
-        start, end, name = getTimeInterval.getPeriod('Year', year = yr)
-        #print(start, '\t', end, '\t Year ', yr)
-        #print(start, '\t', end, '\t', int, name)
-
     for thermostat in ['Upstairs', 'Downstairs']:
         makeReport(c, thermostat)
-    
-        
-    #makeReport(c, 'RDU')
-    #makeReport(c, 'MYR')
+
+    print(insaneUsage)
 
 if __name__ == '__main__':
   main()
