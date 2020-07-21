@@ -7,6 +7,7 @@ path.append('/home/jim/tools/')
 from shared import getTimeInterval
 
 DBname = '/home/jim/tools/Honeywell/MBthermostat3.sql'
+saneUsageMax = 40.0
 saneUsageMax = 10.0
 global insaneUsage
 insaneUsage = ''
@@ -29,7 +30,7 @@ def fmtTempsLine(tag, row):
 
 def fmtRunTmLine(x):
     
-    line = 'Invalid "elapsed":' + str(x['elapsed'])
+    line = ''
     if x['elapsed'] > 0:
         heatPct = '{:>6.1f}'.format(100.0 * x['heat']  / x['elapsed'])
         coolPct = '{:>6.1f}'.format(100.0 * x['cool']  / x['elapsed'])
@@ -53,6 +54,8 @@ def checkSanity(runStats, date, where):
                 ' limit. Runtime = {:>8s}'
             runTime = str(dt.timedelta(seconds = runStats[which]))
             insaneUsage += fmt.format(date, where, which, runPct, saneUsageMax, runTime)
+            return True
+    return False
                                                
 def runTimes(c, table, start, end):
     select = 'SELECT statusTime, fanOn, outputStatus FROM ' + table +\
@@ -60,7 +63,7 @@ def runTimes(c, table, start, end):
     c.execute(select, (start, end))
     result = c.fetchall()
     fanTime = heatTime = coolTime = 0
-    first = last = None
+    first = last = previous = None
     for r in result:
         statTime = dt.datetime.strptime((r['statusTime']), '%Y-%m-%d %H:%M:%S')
         # may not have data for the entire time range
@@ -87,12 +90,16 @@ def runTimes(c, table, start, end):
         else:
             print('Unexpected: outputStatus:', r['outputStatus'], '\tfanOn:',  r['fanOn'])
         previous = statTime
-    if (end - previous).total_seconds() < 600:
-        last = end
+    # in case no data (Monday)
+    if previous:
+        if (end - previous).total_seconds() < 600:
+            last = end
+        else:
+            last = previous
+        #print(start, end, first, last, (last - first).total_seconds())
+        elapsed = (last - first).total_seconds()
     else:
-        last = previous
-    #print(start, end, first, last, (last - first).total_seconds())
-    elapsed = (last - first).total_seconds()
+        elapsed = 0
     return {'elapsed' : elapsed, 'heat' : heatTime, 'cool' : coolTime, 'fanOn': fanTime}
 
 def getYears(c, thermostat):
@@ -137,8 +144,9 @@ def makeSection(c, thermostat, title, byDay = False, year = None):
             EOD = dt.datetime.combine(dt.datetime.strptime(record['date'], '%Y-%m-%d').date(), \
                                       dt.time.max)
             dailyRunStats = runTimes(c, thermostat, BOD, EOD)
-            checkSanity(dailyRunStats, record['date'], thermostat)
             lineRunTm = fmtRunTmLine(dailyRunStats)
+            if checkSanity(dailyRunStats, record['date'], thermostat):
+                lineRunTm += ' High Usage'
         else:
             lineTemps = fmtTempsLine(name, record)
             lineRunTm = fmtRunTmLine(runTimes(c, thermostat, start, end))
