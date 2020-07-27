@@ -7,8 +7,8 @@ path.append('/home/jim/tools/')
 from shared import getTimeInterval
 
 DBname = '/home/jim/tools/Honeywell/MBthermostat3.sql'
-saneUsageMax = 40.0
-saneUsageMax = 10.0
+saneUsageMax = 33.3
+#saneUsageMax = 10.0
 global insaneUsage
 insaneUsage = ''
 
@@ -113,7 +113,7 @@ def getYears(c, thermostat):
     last = dt.datetime.strptime(max['max'], '%Y-%m-%d %H:%M:%S')
     return first, last
 
-def makeSection(c, thermostat, title, byDay = False, year = None):
+def makeSection(c, thermostat, title, byDay = False, byMonth = False, year = None):
     start, end, name = getTimeInterval.getPeriod(title, year = year)
     selectFields =  'SELECT ' \
         'date(statusTime)  AS date, '\
@@ -130,9 +130,12 @@ def makeSection(c, thermostat, title, byDay = False, year = None):
         ' WHERE statusTime >= ? AND statusTime <= ? '
     select = selectFields + ' ;'
     # sqlite date(timestamp) returns the UTC date
-    selectByDay = selectFields + ' GROUP BY substr(statusTime,1,10) ORDER BY statusTime DESC;'
+    selectByDay   = selectFields + ' GROUP BY substr(statusTime,1,10) ORDER BY statusTime DESC;'
+    selectByMonth = selectFields + ' GROUP BY substr(statusTime,1, 7) ORDER BY statusTime DESC;'
     if byDay:
         c.execute(selectByDay, (start, end))
+    elif byMonth:
+        c.execute(selectByMonth, (start, end))
     else:
         c.execute(select, (start, end))
     result = c.fetchall()
@@ -147,6 +150,20 @@ def makeSection(c, thermostat, title, byDay = False, year = None):
             lineRunTm = fmtRunTmLine(dailyRunStats)
             if checkSanity(dailyRunStats, record['date'], thermostat):
                 lineRunTm += ' High Usage'
+        elif byMonth:
+            lineTemps = fmtTempsLine(record['date'][0:7], record)
+            BOM = dt.datetime.combine(dt.datetime.strptime(record['date'], '%Y-%m-%d').date(), \
+                                      dt.time.min)
+            BOM = BOM.replace(day = 1)
+            if BOM.month == 12:
+                EOM = BOM.replace(year = BOM.year + 1, month = 1, day = 1) - \
+                        dt.timedelta(microseconds = 1)
+            else:
+                EOM = BOM.replace(month = BOM.month + 1, day = 1) - \
+                    dt.timedelta(microseconds = 1)
+            #print('byMonth', record['date'], BOM, EOM)
+            dailyRunStats = runTimes(c, thermostat, BOM, EOM)
+            lineRunTm = fmtRunTmLine(dailyRunStats)
         else:
             lineTemps = fmtTempsLine(name, record)
             lineRunTm = fmtRunTmLine(runTimes(c, thermostat, start, end))
@@ -169,6 +186,9 @@ def makeReport(c, thermostat):
         printHeader()
         for year in range(last.year, first.year - 1, -1):
             makeSection(c, thermostat, period, year = year)
+    printHeader()
+    makeSection(c, thermostat, 'YearByMonth', byMonth = True)
+    makeSection(c, thermostat, 'LastYear')
     printHeader()
     for year in range(last.year, first.year - 1, -1):
         makeSection(c, thermostat, 'Year', year = year)
