@@ -173,10 +173,6 @@ def makeReport(c, thermostat):
     first, last = getYears(c, thermostat)
     print('---------------------------', thermostat, '----------------------------')
     printHeader()
-    #makeSection(c, thermostat, '2016-08-07')
-    #makeSection(c, thermostat, '2017-01-10')
-    #makeSection(c, thermostat, '2019-08-22')
-    #return
     makeSection(c, thermostat, 'Today')
     makeSection(c, thermostat, 'Prev7days', byDay = True)
     printHeader()
