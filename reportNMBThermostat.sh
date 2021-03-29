@@ -2,7 +2,8 @@
 #set -x
 logDir="/home/jim/tools/Honeywell/logs"
 log=$logDir/report.$(/bin/date +%F-%T | /bin/tr : .);
-/home/jim/tools/Honeywell/reportNMBThermostat.py > $log 2>&1
+#/home/jim/tools/Honeywell/reportNMBThermostat.py > $log 2>&1
+/home/jim/tools/Honeywell/reportNMBThermostat+BayWeb+Ecobee.py  > $log 2>&1
 cat $log
 # keep only the newest
 REMOVE=$(ls -t $logDir/report* | sed 1,20d)
