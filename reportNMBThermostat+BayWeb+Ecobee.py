@@ -206,7 +206,7 @@ def main():
     BayWebDB    = '/home/jim/tools/Honeywell/MBthermo.sql'
     EcobeeDB    = '/home/jim/tools/Ecobee/MBthermostat.sql'
     WorkingDB   = '/home/jim/tools/Honeywell/Working.sql'
-    #WorkingDB   = ':memory:'
+    WorkingDB   = ':memory:'
     Create = 'CREATE TABLE IF NOT EXISTS ZZZZZZZZ (\n' +\
         ' id             INTEGER PRIMARY KEY,      \n' +\
         ' statusTime     INTEGER,                  \n' +\
@@ -319,7 +319,7 @@ def main():
         
         index = Index.replace('ZZZZZZZZ', table)
         index = index.replace('YYYYYYYY', thermostat)
-        print(index)
+        #print(index)
         c.execute(index)
         
         # recode Ecobee coolStatus & heatStatus to outputStatus
