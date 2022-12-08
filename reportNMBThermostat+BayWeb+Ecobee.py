@@ -205,6 +205,7 @@ def main():
     HoneywellDB = '/home/jim/tools/Honeywell/MBthermostat3.sql'
     BayWebDB    = '/home/jim/tools/Honeywell/MBthermo.sql'
     EcobeeDB    = '/home/jim/tools/Ecobee/MBthermostat.sql'
+    EcobeeDB    = '/home/jim/tools/Ecobee/Thermostats.sql'
     WorkingDB   = '/home/jim/tools/Honeywell/Working.sql'
     WorkingDB   = ':memory:'
     Create = 'CREATE TABLE IF NOT EXISTS ZZZZZZZZ (\n' +\
