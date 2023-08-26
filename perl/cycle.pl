@@ -7,8 +7,8 @@ use Time::Seconds;              # Perl core module
 use strict;                     # Good practice
 use warnings;                   # Good practice
 
-my $LOGIN = "Me\@gmail.com";
-my $PASSWORD = "MyPassword!";
+my $LOGIN = "jim.mollmann\@gmail.com";
+my $PASSWORD = "Clearwater2111!";
 my $UP = 1196322;
 my $DOWN = 1196305;
 my $COOKIE = "/tmp/honeywell_cookie.dat";
@@ -46,7 +46,7 @@ sub set_temp {
     my $tod = qx(date);
     chomp $tod;
     print "$tod:set_temp:$TGT $LOC\n" if $debug;
-    return;
+    #return;
 
     my $curl="curl -s -c $COOKIE $PORTAL/ -d UserName=$LOGIN -d Password=$PASSWORD -d timeOffset=0";
 
@@ -118,10 +118,12 @@ set_temp($UP, 80);
 
 for ($i = 0; $i <7; $i++) {
     if (sleep_until()) {
-	set_temp($DOWN, 70);
-	set_temp($UP, 71);
+	set_temp($DOWN, 60);
+	sleep(15);
+	set_temp($UP, 61);
     } else {
 	set_temp($DOWN, 79);
+	sleep(15);
 	set_temp($UP, 80);
     }
 }
