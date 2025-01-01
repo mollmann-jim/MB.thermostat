@@ -14,6 +14,12 @@ saneUsageMax = 33.3
 global insaneUsage
 insaneUsage = ''
 
+def adapt_datetime(dt):
+    return dt.isoformat(sep=' ')
+
+def convert_datetime(val):
+    return dt.datetime.fromisoformat(val).replace('T', ' ')
+    
 def print_to_string(*args, **kwargs):
     output = io.StringIO()
     print(*args, file=output, **kwargs)
@@ -62,7 +68,8 @@ def recodeOldThermostat(c, thermostat):
             continue
         if len(dataTime) == 19:
             updates += 1
-            unaware  = dt.datetime.strptime(dataTime, '%Y-%m-%d %H:%M:%S')
+            #unaware  = dt.datetime.strptime(dataTime, '%Y-%m-%d %H:%M:%S')
+            unaware  = dt.datetime.fromisoformat(dataTime)
             aware    = unaware.astimezone(est)
             dataTime = aware
             tz      += 1
@@ -213,6 +220,11 @@ def printHeader():
 
 def checkSanity(runStats, date, where):
     global insaneUsage
+    # do not flag old usage
+    now = dt.datetime.now()
+    date = dt.datetime.strptime(date, '%Y-%m-%d')
+    if (now - date) > dt.timedelta(days = 31):
+        return False
     for which in ['heat', 'cool', 'fan']:
         if runStats[which] is not None:
             runPct = 100.0 * runStats[which] / runStats['elapsed']
@@ -232,8 +244,10 @@ def runTimes(c, table, start, end):
     result = c.fetchone()
     if result['first'] is None or result['last'] is None:
         return {'elapsed' : 0, 'heat' : 0, 'cool' : 0, 'aux' : 0, 'fan': 0}
-    first = dt.datetime.strptime(result['first'], '%Y-%m-%d %H:%M:%S%z')
-    last  = dt.datetime.strptime(result['last'], '%Y-%m-%d %H:%M:%S%z')
+    #first = dt.datetime.strptime(result['first'], '%Y-%m-%d %H:%M:%S%z')
+    #last  = dt.datetime.strptime(result['last'], '%Y-%m-%d %H:%M:%S%z')
+    first = dt.datetime.fromisoformat(result['first'])
+    last  = dt.datetime.fromisoformat(result['last'])
     selectRunTimes = 'SELECT ' \
         ' SUM(auxHeat1)  AS aux,    ' \
         ' SUM(heatPump1) AS heat,   ' \
@@ -261,8 +275,10 @@ def getYears(c, thermostat):
         'FROM ' + thermostat + ';'
     c.execute(select_min_max_yr)
     minmax = c.fetchone()
-    first = dt.datetime.strptime(minmax['min'], '%Y-%m-%d %H:%M:%S%z')
-    last  = dt.datetime.strptime(minmax['max'], '%Y-%m-%d %H:%M:%S%z')
+    #first = dt.datetime.strptime(minmax['min'], '%Y-%m-%d %H:%M:%S%z')
+    #last  = dt.datetime.strptime(minmax['max'], '%Y-%m-%d %H:%M:%S%z')
+    first = dt.datetime.fromisoformat(minmax['min'])
+    last  = dt.datetime.fromisoformat(minmax['max'])
     return first, last
 
 def makeSection(c, thermostat, title, byDay = False, byMonth = False, year = None):
@@ -499,6 +515,9 @@ def main():
     UpdateC  = 'UPDATE ZZZZZZZZ SET desiredCool = NULL WHERE desiredCool == "null";'
     UpdateH  = 'UPDATE ZZZZZZZZ SET desiredHeat = NULL WHERE desiredHeat == "null";'
     UpdateT  = 'UPDATE ZZZZZZZZ SET temperature = NULL WHERE temperature == "null";'
+    sqlite3.register_adapter(dt.datetime, adapt_datetime)
+    sqlite3.register_converter("DATETIME", convert_datetime)
+    db = sqlite3.connect(DBname, detect_types=sqlite3.PARSE_DECLTYPES)
     db = sqlite3.connect(WorkingDB)
     db.row_factory = sqlite3.Row
     c = db.cursor()
