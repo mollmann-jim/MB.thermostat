@@ -177,7 +177,7 @@ def fmtTempsLine(tag, row):
     noData = '  None'
     noData = '     .'
     line = '{:>10s}'.format(tag) + ': (none)'
-    if row['minT']:
+    if row['minT'] is not None:
         period =  '{:>10s}'.format(tag)
         minT   = ' {:>5.1f}'.format(row['minT'])       if row['minT'] is not None else noData
         maxT   = ' {:>5.1f}'.format(row['maxT'])       if row['maxT'] is not None else noData
