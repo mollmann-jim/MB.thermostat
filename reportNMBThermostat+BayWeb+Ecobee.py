@@ -2,13 +2,17 @@
 import datetime as dt
 import sqlite3
 from dateutil.tz import tz
+import os
+
+home = os.getenv('HOME')
+
 from sys import path
-path.append('/home/jim/tools/')
+path.append(home + '/tools/')
 from shared import getTimeInterval
 import pytz
 import io
 
-DBname = '/home/jim/tools/Honeywell/MBthermostat3.sql'
+DBname = home + '/tools/Honeywell/MBthermostat3.sql'
 saneUsageMax = 33.3
 #saneUsageMax = 10.0
 global insaneUsage
@@ -365,11 +369,11 @@ def makeReport(c, thermostat):
     #makeSection(c, thermostat,  'All', byDay = True)
     
 def main():
-    HoneywellDB = '/home/jim/tools/Honeywell/MBthermostat3.sql'
-    BayWebDB    = '/home/jim/tools/Honeywell/MBthermo.sql'
-    EcobeeDB    = '/home/jim/tools/Ecobee/MBthermostat.sql'
-    EcobeeDB    = '/home/jim/tools/Ecobee/Thermostats.sql'
-    WorkingDB   = '/home/jim/tools/Honeywell/Working.sql'
+    HoneywellDB = home + '/tools/Honeywell/MBthermostat3.sql'
+    BayWebDB    = home + '/tools/Honeywell/MBthermo.sql'
+    EcobeeDB    = home + '/tools/Ecobee/MBthermostat.sql'
+    EcobeeDB    = home + '/tools/Ecobee/Thermostats.sql'
+    WorkingDB   = home + '/tools/Honeywell/Working.sql'
     WorkingDB   = ':memory:'
     Create = 'CREATE TABLE IF NOT EXISTS ZZZZZZZZ (\n' +\
         ' id             INTEGER PRIMARY KEY,      \n' +\
