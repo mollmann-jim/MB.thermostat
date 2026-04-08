@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
 import datetime as dt
 import sqlite3
-from dateutil.tz import tz
 import os
+import io
+from sys import path
+import pytz
+from dateutil.tz import tz
 
 home = os.getenv('HOME')
-
-from sys import path
 path.append(home + '/tools/')
 from shared import getTimeInterval
-import pytz
-import io
+
 
 DBname = home + '/tools/Honeywell/MBthermostat3.sql'
 saneUsageMax = 33.3
 #saneUsageMax = 10.0
-global insaneUsage
+#global insaneUsage
 insaneUsage = ''
 
-def adapt_datetime(dt):
-    return dt.isoformat(sep=' ')
+def adapt_datetime(dateTime):
+    return dateTime.isoformat(sep=' ')
 
 def convert_datetime(val):
     return dt.datetime.fromisoformat(val).replace('T', ' ')
-    
+
 def print_to_string(*args, **kwargs):
     output = io.StringIO()
     print(*args, file=output, **kwargs)
@@ -48,11 +48,11 @@ def recodeOldThermostat(c, thermostat):
         ' WHERE id = ?;'
     est = pytz.timezone('US/Eastern')
     fanTime = heatTime = coolTime = 0
-    first = last = previous = None
-    E = e400 = tz = \
+    first = previous = None
+    E = e400 = TZ = \
         H = hCool = hHeat = hFan = hOff = hErr = \
             B = bCN = bCool = bHN = bHeat = bFan = bIdle = bErr = \
-                oStatN = unxStat = 0 
+                oStatN = unxStat = 0
     for record in result:
         dataTime     = record['dataTime']
         Rid          = record['id']
@@ -76,7 +76,7 @@ def recodeOldThermostat(c, thermostat):
             unaware  = dt.datetime.fromisoformat(dataTime)
             aware    = unaware.astimezone(est)
             dataTime = aware
-            tz      += 1
+            TZ      += 1
             #print(Rid, unaware, aware)
             #c.execute(update,(aware, Rid))
         else:
@@ -88,7 +88,8 @@ def recodeOldThermostat(c, thermostat):
             previous = dataTime + dt.timedelta(minutes = 5)
         delta = (dataTime - previous).total_seconds()
         # account for missing data by assuming 5 minutes
-        if delta > 900: delta = 300
+        if delta > 900:
+            delta = 300
         # HoneyWell thermostat
         if src == 'H':
             H += 1
@@ -105,7 +106,7 @@ def recodeOldThermostat(c, thermostat):
                 hFan    += 1
             elif outputStatus == 'off':
                 hOff    += 1
-                pass
+                #pass
             else:
                 print('Unexpected outputStatus:', outputStatus, Rid, dataTime, src)
                 hErr += 1
@@ -116,7 +117,7 @@ def recodeOldThermostat(c, thermostat):
                 if temperature is None or desiredCool is None:
                     # missing data - ignore
                     bCN += 1
-                    pass
+                    #pass
                 elif temperature > desiredCool:
                     coolTime = delta
                     fan      = delta
@@ -125,7 +126,7 @@ def recodeOldThermostat(c, thermostat):
                 if temperature is None or desiredHeat is None:
                     # missing data - ignore
                     bHN += 1
-                    pass
+                    #pass
                 elif temperature < desiredHeat:
                     heatTime = delta
                     fan      = delta
@@ -137,13 +138,13 @@ def recodeOldThermostat(c, thermostat):
                 elif (fan == 0 or fan is None):
                     # no fan/heat/cool - just idle
                     bIdle   += 1
-                    pass
+                    #pass
             else:
                 print('Unexpected outputStatus:', outputStatus, Rid, dataTime, src)
                 bErr += 1
         elif outputStatus is None:
             oStatN += 1
-            pass
+            #pass
         else:
             print('Unexpected: outputStatus:', outputStatus, '\tfan:',  fan)
             unxStat += 1
@@ -156,7 +157,7 @@ def recodeOldThermostat(c, thermostat):
                             '\trecodes: \n'
                             '\t\tE:\t',       E,       '\n',
                             '\t\te400:\t',    e400,    '\n',
-                            '\t\ttz:\t',      tz,      '\n',
+                            '\t\ttz:\t',      TZ,      '\n',
                             '\t\tH:\t',       H,       '\n',
                             '\t\thCool:\t',   hCool,   '\n',
                             '\t\thHeat:\t',   hHeat,   '\n',
@@ -174,40 +175,39 @@ def recodeOldThermostat(c, thermostat):
                             '\t\toStatN:\t',  oStatN,  '\n',
                             '\t\tunxStat:',   unxStat, '\n')
     return stats
-    
+
 def fmtTempsLine(tag, row):
     #print(tag, row['minT'],row['maxT'],row['avgT'],row['minC'],row['maxC'],row['avgC'],
     #      row['minH'],row['maxH'],row['avgH'])
     noData = '  None'
     noData = '     .'
-    line = '{:>10s}'.format(tag) + ': (none)'
+    line = f'{tag:>10s} : (none)'
     if row['minT'] is not None:
-        period =  '{:>10s}'.format(tag)
-        minT   = ' {:>5.1f}'.format(row['minT'])       if row['minT'] is not None else noData
-        maxT   = ' {:>5.1f}'.format(row['maxT'])       if row['maxT'] is not None else noData
-        avgT   = ' {:>5.1f}'.format(row['avgT'])       if row['avgT'] is not None else noData
-        minC   = ' {:>5.1f}'.format(int(row['minC']))  if row['minC'] is not None else noData
-        maxC   = ' {:>5.1f}'.format(int(row['maxC']))  if row['maxC'] is not None else noData
-        avgC   = ' {:>5.1f}'.format(row['avgC'])       if row['avgC'] is not None else noData
-        minH   = ' {:>5.1f}'.format(int(row['minH']))  if row['minH'] is not None else noData
-        maxH   = ' {:>5.1f}'.format(int(row['maxH']))  if row['maxH'] is not None else noData
-        avgH   = ' {:>5.1f}'.format(row['avgH']) if row['avgH'] is not None else noData
+        period = f'{tag:>10s}'
+        minT   = f' {row['minT']:>5.1f}'     if row['minT'] is not None else noData
+        maxT   = f' {row['maxT']:>5.1f}'     if row['maxT'] is not None else noData
+        avgT   = f' {row['avgT']:>5.1f}'     if row['avgT'] is not None else noData
+        minC   = f' {int(row['minC']):>-5d}' if row['minC'] is not None else noData
+        maxC   = f' {int(row['maxC']):>5d}'  if row['maxC'] is not None else noData
+        avgC   = f' {row['avgC']:>5.1f}'     if row['avgC'] is not None else noData
+        minH   = f' {int(row['minH']):>5d}'  if row['minH'] is not None else noData
+        maxH   = f' {int(row['maxH']):>5d}'  if row['maxH'] is not None else noData
+        avgH   = f' {row['avgH']:>5.1f}'     if row['avgH'] is not None else noData
         line = period + minT + maxT + avgT + minC + maxC + avgC + minH + maxH + avgH
     return line
 
 def fmtRunTmLine(x):
-    
     line = ''
     noData = '     .'
     if x['elapsed'] > 0:
-        heatPct = '{:>6.1f}'.format(100.0 * x['heat']  / x['elapsed']) \
-            if x['heat']  is not None and x['heat'] > 0 else noData
-        coolPct = '{:>6.1f}'.format(100.0 * x['cool']  / x['elapsed']) \
-            if x['cool']  is not None and x['cool'] > 0 else noData
-        fanPct  = '{:>6.1f}'.format(100.0 * x['fan']   / x['elapsed']) \
-            if x['fan']   is not None and x['fan']  > 0 else noData
-        auxPct  = '{:>6.1f}'.format(100.0 * x['aux']   / x['elapsed']) \
-            if x['aux']   is not None and x['aux']  > 0 else noData
+        heatPct = f'{(100.0 * x['heat']  / x['elapsed']):>6.1f}' \
+            if x['heat']  is not None else noData
+        coolPct = f'{(100.0 * x['cool']  / x['elapsed']):>6.1f}' \
+            if x['cool']  is not None else noData
+        fanPct  =f'{(100.0 * x['fan']    / x['elapsed']):>6.1f}' \
+            if x['fan']   is not None else noData
+        auxPct  =f'{(100.0 * x['aux']    / x['elapsed']):>6.1f}' \
+            if x['aux']   is not None else noData
         line = heatPct + coolPct + fanPct + auxPct
     return line
 
@@ -239,7 +239,7 @@ def checkSanity(runStats, date, where):
                 insaneUsage += fmt.format(date, where, which, runPct, saneUsageMax, runTime)
                 return True
     return False
-                                               
+
 def runTimes(c, table, start, end):
     selectTime = 'SELECT min(dataTime) as first, max(dataTime) as last '\
         ' FROM ' + table +\
@@ -340,7 +340,7 @@ def makeSection(c, thermostat, title, byDay = False, byMonth = False, year = Non
             lineTemps = fmtTempsLine(name, record)
             lineRunTm = fmtRunTmLine(runTimes(c, thermostat, start, end))
         print(lineTemps + lineRunTm)
-        
+
 def makeReport(c, thermostat):
     first, last = getYears(c, thermostat)
     print('---------------------------', thermostat, '----------------------------')
@@ -367,7 +367,7 @@ def makeReport(c, thermostat):
 
     #printHeader()
     #makeSection(c, thermostat,  'All', byDay = True)
-    
+
 def main():
     HoneywellDB = home + '/tools/Honeywell/MBthermostat3.sql'
     BayWebDB    = home + '/tools/Honeywell/MBthermo.sql'
@@ -428,7 +428,7 @@ def main():
         '    WHERE SUBSTR(dataTime,1,4) > "2020"  \n' +\
         '    ;                                      '
     # EcoBee was new in NMB in March of 2021
-    
+
     Insert = 'INSERT OR REPLACE INTO ZZZZZZZZ \n' +\
         '   ( dataTime,                       \n' +\
         '     temperature,                    \n' +\
@@ -536,12 +536,12 @@ def main():
         create = Create.replace('ZZZZZZZZ', table)
         #print(create)
         c.execute(create)
-        
+
         index = Index.replace('ZZZZZZZZ', table)
         index = index.replace('YYYYYYYY', thermostat)
         #print(index)
         c.execute(index)
-        
+
         # recode Ecobee coolStatus & heatStatus to outputStatus
         etable = 'main.e' + thermostat
         c.execute('DROP TABLE IF EXISTS ' + etable)
@@ -553,7 +553,7 @@ def main():
         #print(einsert)
         c.execute(einsert)
         db.commit()
-        
+
         insert = Insert.replace('ZZZZZZZZ', table)
         insert = insert.replace('YYYYYYYY', thermostat)
         #print(insert)
@@ -570,11 +570,11 @@ def main():
 
         stats += recodeOldThermostat(c, thermostat)
         db.commit()
-                
+
         makeReport(c, thermostat)
 
     print(insaneUsage)
     print('\n', stats)
 
 if __name__ == '__main__':
-  main()
+    main()
